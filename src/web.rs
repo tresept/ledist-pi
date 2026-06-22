@@ -76,6 +76,13 @@ struct ApplyRequest {
     values: serde_json::Value,
     program: String,
 }
+#[derive(Deserialize)]
+struct SingleRequest {
+    profile_id: String,
+    field_id: String,
+    asset_id: String,
+    brightness: u8,
+}
 
 pub fn web_router(state: Arc<AppState>) -> Router {
     Router::new()
@@ -87,10 +94,88 @@ pub fn web_router(state: Arc<AppState>) -> Router {
         .route("/api/profiles/{id}/templates", get(templates))
         .route("/api/profiles/{id}/templates/{template}", get(template))
         .route("/api/display/apply", post(apply))
+        .route("/api/display/single", post(single))
         .route("/api/display/test", post(test_display))
         .route("/api/display/blank", post(blank))
         .route("/api/display/state", get(display_state))
         .with_state(state)
+}
+
+async fn single(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<SingleRequest>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    if req.brightness > 100 {
+        return Err((StatusCode::BAD_REQUEST, "brightness must be 0..100".into()));
+    }
+    let profile = state
+        .profiles
+        .get(&req.profile_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "unknown profile".into()))?;
+    let field = profile
+        .fields
+        .iter()
+        .find(|field| field.id == req.field_id)
+        .ok_or_else(|| (StatusCode::UNPROCESSABLE_ENTITY, "unknown field".into()))?;
+    let directory = field.asset_dir.as_deref().ok_or_else(|| {
+        (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "field is not an image asset".into(),
+        )
+    })?;
+    let region = profile
+        .regions
+        .get(field.target_region.as_deref().ok_or_else(|| {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "field has no target region".into(),
+            )
+        })?)
+        .ok_or_else(|| {
+            (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "unknown target region".into(),
+            )
+        })?;
+    let assets = AssetRegistry::scan(&state.data_dir.join(&req.profile_id))
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (width, height, pixels) = assets
+        .load_rgb(directory, &req.asset_id)
+        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
+    if (width, height) != (region.width, region.height) {
+        return Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            format!(
+                "expected {}x{}, got {width}x{height}",
+                region.width, region.height
+            ),
+        ));
+    }
+    let mut frame = RgbFrame::black(profile.profile.canvas_width, profile.profile.canvas_height);
+    frame
+        .blit_rgb(region.x as isize, region.y as isize, width, height, &pixels)
+        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
+    let display = state.display.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "display backend is unavailable".into(),
+        )
+    })?;
+    display
+        .send(DisplayCommand::SetBrightness(req.brightness))
+        .map_err(|_| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "display worker stopped".into(),
+            )
+        })?;
+    display.send(DisplayCommand::Present(frame)).map_err(|_| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "display worker stopped".into(),
+        )
+    })?;
+    Ok(StatusCode::OK)
 }
 async fn field_assets(
     Path((id, field)): Path<(String, String)>,

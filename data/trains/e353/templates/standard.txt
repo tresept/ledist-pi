@@ -1,7 +1,0 @@
-loop
-    frame
-        set service service
-        set train_name train_name
-    end
-    wait 3s
-end

@@ -1,9 +1,7 @@
 loop
     frame
         set service service_ja
-    end
-    wait 3s
-    frame
+        set right_top destination_ja
         scroll right_bottom scroll_text
     end
     wait scroll_end
