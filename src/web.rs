@@ -9,12 +9,14 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
 pub struct AppState {
     profiles: BTreeMap<String, Profile>,
     current: Mutex<Option<DisplayState>>,
+    data_dir: PathBuf,
 }
 #[derive(Clone, Serialize)]
 pub struct DisplayState {
@@ -30,7 +32,12 @@ impl AppState {
                 .map(|p| (p.profile.id.clone(), p))
                 .collect(),
             current: Mutex::new(None),
+            data_dir: PathBuf::from("data/trains"),
         }
+    }
+    pub fn with_data_dir(mut self, data_dir: impl Into<PathBuf>) -> Self {
+        self.data_dir = data_dir.into();
+        self
     }
     pub fn current_state(&self) -> Option<DisplayState> {
         self.current.lock().unwrap().clone()
@@ -56,6 +63,7 @@ pub fn web_router(state: Arc<AppState>) -> Router {
         .route("/app.js", get(script))
         .route("/api/profiles", get(list_profiles))
         .route("/api/profiles/{id}", get(profile))
+        .route("/api/profiles/{id}/templates/{template}", get(template))
         .route("/api/display/apply", post(apply))
         .route("/api/display/blank", post(blank))
         .route("/api/display/state", get(display_state))
@@ -98,6 +106,22 @@ async fn profile(
         .cloned()
         .map(Json)
         .ok_or(StatusCode::NOT_FOUND)
+}
+async fn template(
+    Path((id, template)): Path<(String, String)>,
+    State(state): State<Arc<AppState>>,
+) -> Result<String, StatusCode> {
+    if !state.profiles.contains_key(&id) || template.contains('/') || template.contains('\0') {
+        return Err(StatusCode::NOT_FOUND);
+    }
+    std::fs::read_to_string(
+        state
+            .data_dir
+            .join(id)
+            .join("templates")
+            .join(format!("{template}.txt")),
+    )
+    .map_err(|_| StatusCode::NOT_FOUND)
 }
 async fn apply(
     State(state): State<Arc<AppState>>,

@@ -11,7 +11,13 @@ async fn main() -> Result<()> {
         .parse()?;
     println!("LEDist UI: http://{address}");
     let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, web_router(Arc::new(AppState::new(profiles)))).await?;
+    axum::serve(
+        listener,
+        web_router(Arc::new(
+            AppState::new(profiles).with_data_dir(Path::new(&root).join("trains")),
+        )),
+    )
+    .await?;
     Ok(())
 }
 fn load_profiles(dir: impl AsRef<Path>) -> Result<Vec<Profile>> {
