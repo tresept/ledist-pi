@@ -1,0 +1,26 @@
+[package]
+name = "ledist-pi"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-or-later"
+
+[features]
+default = []
+hardware = ["dep:rust-hub75-matrix"]
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+image = { version = "0.25", default-features = false, features = ["png"] }
+notify = "8"
+rust-hub75-matrix = { git = "https://github.com/tresept/rust-hub75-matrix", rev = "3c76e104cad1c0b24b1a1e4b6e24d58b02b98d9d", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["full"] }
+toml = "0.8"
+tower-http = { version = "0.6", features = ["fs"] }
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }

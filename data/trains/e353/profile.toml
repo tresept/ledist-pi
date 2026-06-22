@@ -1,0 +1,64 @@
+[profile]
+id = "e353"
+name = "E353系"
+description = "中央東線特急形"
+canvas_width = 128
+canvas_height = 32
+default_brightness = 40
+default_template = "standard"
+
+[regions.car_number]
+x = 0
+y = 0
+width = 16
+height = 16
+[regions.service]
+x = 16
+y = 0
+width = 24
+height = 16
+[regions.train_name]
+x = 40
+y = 0
+width = 48
+height = 16
+[regions.train_number]
+x = 88
+y = 0
+width = 40
+height = 16
+[regions.seat_type]
+x = 0
+y = 16
+width = 32
+height = 16
+[regions.lower_right]
+x = 32
+y = 16
+width = 96
+height = 16
+
+[[fields]]
+id = "car_number"
+label = "号車番号"
+type = "number"
+min = 1
+max = 12
+default = 4
+[[fields]]
+id = "service"
+label = "列車種別"
+type = "asset"
+asset_dir = "assets/service"
+target_region = "service"
+[[fields]]
+id = "train_name"
+label = "列車名"
+type = "asset"
+asset_dir = "assets/train-name"
+target_region = "train_name"
+[[fields]]
+id = "next_stop_text"
+label = "次停車駅案内"
+type = "text"
+default = "次は東京です"

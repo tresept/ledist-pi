@@ -1,0 +1,58 @@
+[profile]
+id = "e233-2000"
+name = "E233系2000番台"
+description = "常磐緩行線・千代田線直通用"
+canvas_width = 128
+canvas_height = 32
+default_brightness = 40
+default_template = "intermediate-through"
+
+[regions.service]
+x = 0
+y = 0
+width = 48
+height = 32
+[regions.right]
+x = 48
+y = 0
+width = 80
+height = 32
+[regions.right_top]
+x = 48
+y = 0
+width = 80
+height = 16
+[regions.right_bottom]
+x = 48
+y = 16
+width = 80
+height = 16
+
+[[fields]]
+id = "service_ja"
+label = "種別・日本語"
+type = "asset"
+asset_dir = "assets/service/ja"
+target_region = "service"
+required = true
+require_exact_size = true
+[[fields]]
+id = "scroll_text"
+label = "スクロール文章"
+type = "text"
+default = "この列車は相鉄線へ直通します"
+[[fields]]
+id = "brightness"
+label = "輝度"
+type = "range"
+min = 0
+max = 100
+default = 40
+
+[scroll_defaults]
+font = "shinonome-mincho-16"
+color = "#ffd060"
+speed_px_per_second = 20.0
+start_padding = 80
+end_padding = 80
+repeat = false

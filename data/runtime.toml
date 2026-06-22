@@ -1,0 +1,13 @@
+backend = "simulator"
+bind = "0.0.0.0:3000"
+data_dir = "data"
+simulator_path = "data/simulator.png"
+brightness = 40
+
+[matrix]
+rows = 32
+cols = 64
+chain_length = 2
+parallel = 1
+rp1_backend = "rio"
+gpio_slowdown = 1
