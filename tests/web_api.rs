@@ -88,3 +88,32 @@ require_exact_size=true
     assert_eq!(ok.status(), StatusCode::OK);
     assert!(state.current_state().is_some());
 }
+
+#[tokio::test]
+async fn test_display_endpoint_requires_a_128_by_32_test_png() {
+    let data = tempfile::tempdir().unwrap();
+    let state = Arc::new(AppState::new(vec![]).with_data_dir(data.path().join("trains")));
+    let app = web_router(state);
+    let missing = app
+        .clone()
+        .oneshot(
+            Request::post("/api/display/test")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+    image::RgbImage::new(128, 32)
+        .save(data.path().join("test.png"))
+        .unwrap();
+    let ok = app
+        .oneshot(
+            Request::post("/api/display/test")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(ok.status(), StatusCode::OK);
+}

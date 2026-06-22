@@ -1,3 +1,16 @@
-<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LEDist</title><style>
-:root{color-scheme:dark;--ink:#e8f0ee;--bg:#101617;--panel:#182122;--line:#36504e;--amber:#ffd060;--green:#87d8b1}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px ui-monospace,SFMono-Regular,Menlo,monospace}.rail{max-width:1040px;margin:auto;padding:32px 20px}.mast{display:flex;align-items:baseline;gap:16px;border-bottom:2px solid var(--amber);padding-bottom:16px}.mast h1{margin:0;font-size:32px;letter-spacing:.08em;color:var(--amber)}.mast span{color:#aebfbb}.layout{display:grid;grid-template-columns:minmax(250px,1fr) 2fr;gap:24px;margin-top:24px}.panel{background:var(--panel);border:1px solid var(--line);padding:18px}.panel h2{font-size:13px;color:var(--green);letter-spacing:.12em;margin:0 0 18px}label{display:grid;gap:6px;margin:0 0 14px}input,select,textarea,button{font:inherit;background:#0d1314;color:inherit;border:1px solid var(--line);padding:9px}textarea{min-height:190px;resize:vertical}button{cursor:pointer}button.primary{background:var(--amber);color:#182122;border-color:var(--amber);font-weight:bold}.actions{display:flex;gap:10px;flex-wrap:wrap}.status{white-space:pre-wrap;color:#b9cbc6;margin-top:12px}.error{color:#ff938d}@media(max-width:700px){.layout{grid-template-columns:1fr}}
-</style><body><main class="rail"><header class="mast"><h1>LEDIST</h1><span>128 × 32 / service display control</span></header><div class="layout"><aside class="panel"><h2>車種とテンプレート</h2><label>車種<select id="profile"></select></label><label>テンプレート<select id="template"></select></label><button id="load">テンプレートを読み込む</button><p class="status" id="status">車種を選択してください。</p></aside><section class="panel"><h2>表示設定</h2><form id="form"></form><label>表示シナリオ<textarea id="program" spellcheck="false"></textarea></label><div class="actions"><button class="primary" id="apply" type="button">表示する</button><button id="blank" type="button">消灯する</button></div><p class="status" id="message"></p></section></div></main><script src="/app.js"></script></body></html>
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LEDist</title></head>
+<body>
+<h1>LEDist</h1>
+<label>車種 <select id="profile"></select></label>
+<label>テンプレート <select id="template"></select></label>
+<button id="load" type="button">テンプレートを読み込む</button>
+<p id="status">車種を選択してください。</p>
+<form id="form"></form>
+<label>表示シナリオ <textarea id="program" spellcheck="false"></textarea></label>
+<p><button id="apply" type="button">表示する</button> <button id="blank" type="button">消灯する</button> <button id="test" type="button">試験表示</button></p>
+<p id="message"></p>
+<script src="/app.js"></script>
+</body>
+</html>

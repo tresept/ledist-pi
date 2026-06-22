@@ -77,6 +77,7 @@ pub fn web_router(state: Arc<AppState>) -> Router {
         .route("/api/profiles/{id}/assets/{field}", get(field_assets))
         .route("/api/profiles/{id}/templates/{template}", get(template))
         .route("/api/display/apply", post(apply))
+        .route("/api/display/test", post(test_display))
         .route("/api/display/blank", post(blank))
         .route("/api/display/state", get(display_state))
         .with_state(state)
@@ -183,6 +184,28 @@ async fn apply(
     };
     *state.current.lock().unwrap() = Some(next.clone());
     Ok(Json(next))
+}
+
+async fn test_display(
+    State(state): State<Arc<AppState>>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let path = state
+        .data_dir
+        .parent()
+        .unwrap_or(&state.data_dir)
+        .join("test.png");
+    if !path.is_file() {
+        return Err((StatusCode::NOT_FOUND, "data/test.png がありません".into()));
+    }
+    let (width, height) = image::image_dimensions(&path)
+        .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))?;
+    if (width, height) != (128, 32) {
+        return Err((
+            StatusCode::UNPROCESSABLE_ENTITY,
+            format!("data/test.png は128x32である必要があります（現在: {width}x{height}）"),
+        ));
+    }
+    Ok(StatusCode::OK)
 }
 
 fn validate_values(
