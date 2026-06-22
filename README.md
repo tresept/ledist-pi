@@ -51,6 +51,8 @@ end
 - `clear <region>`: 領域を黒で消去
 - `scroll <region> <text_field>`: プロファイルのスクロール設定と東雲BDFで文字列を流す
 - `wait 3s`、`wait 500ms`、`wait ${field}`、`wait scroll_end`
-- `loop ... end`: 無限ループ（スクリプトの最後に記述）
+- `loop ... end`: メインの無限ループ（スクリプトの最後に記述）
 - `loop 3 ... end`: 内部を指定回数だけ繰返し。入れ子可
+- `while scroll ... end`: スクロール中だけ内部を繰返し
+- `check scroll`: スクロール終了時、現在の`while scroll`を直ちに抜ける
 - `brightness 0..100`、`blank`

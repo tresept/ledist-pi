@@ -10,7 +10,9 @@ pub enum Command {
     WaitSeconds(f64),
     WaitField(String),
     WaitScrollEnd,
+    CheckScroll,
     Loop(Option<usize>, Vec<Command>),
+    WhileScroll(Vec<Command>),
     Scroll(String, String),
     Brightness(u8),
     Blank,
@@ -84,7 +86,13 @@ fn block(lines: &[(usize, &str)], mut i: usize, until_end: bool) -> Result<(Vec<
                 i = next;
                 commands.push(Command::Loop(count, body));
             }
+            ["while", "scroll"] => {
+                let (body, next) = block(lines, i, true)?;
+                i = next;
+                commands.push(Command::WhileScroll(body));
+            }
             ["wait", "scroll_end"] => commands.push(Command::WaitScrollEnd),
+            ["check", "scroll"] => commands.push(Command::CheckScroll),
             ["wait", value] if value.starts_with("${") && value.ends_with('}') => {
                 commands.push(Command::WaitField(value[2..value.len() - 1].into()))
             }

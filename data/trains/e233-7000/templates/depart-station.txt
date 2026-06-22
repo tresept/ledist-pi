@@ -12,12 +12,13 @@ loop
     end
     wait 3s
 
-    loop
+    while scroll
         frame
             set service service_en
             set right_top destination_en
         end
         wait 3s
+        check scroll
 
         frame
             set service service_ja

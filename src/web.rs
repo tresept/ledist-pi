@@ -584,6 +584,8 @@ fn validate_program(profile: &Profile, program: &Program) -> Result<(), String> 
                 }
                 Command::WaitField(field) => check_field(profile, field)?,
                 Command::Loop(_, body) => commands(profile, body)?,
+                Command::WhileScroll(body) => commands(profile, body)?,
+                Command::CheckScroll => {}
                 _ => {}
             }
         }

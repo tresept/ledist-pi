@@ -27,6 +27,7 @@ pub enum ScriptAction {
     Brightness(u8),
     Blank,
     WhileScroll(Arc<Vec<ScriptAction>>),
+    CheckScroll,
 }
 pub enum ScriptEvent {
     Present(RgbFrame),
@@ -42,6 +43,7 @@ pub struct ScriptRunner {
     wait_until: Option<Instant>,
     scroll: Option<(ScrollSpec, Instant)>,
     finished: bool,
+    skip_until_while: bool,
 }
 impl ScriptRunner {
     pub fn new(
@@ -58,6 +60,7 @@ impl ScriptRunner {
             wait_until: None,
             scroll: None,
             finished: false,
+            skip_until_while: false,
         }
     }
     pub fn is_finished(&self) -> bool {
@@ -137,6 +140,9 @@ impl ScriptRunner {
             }
             let action = self.actions[self.index].clone();
             self.index += 1;
+            if self.skip_until_while && !matches!(action, ScriptAction::WhileScroll(_)) {
+                continue;
+            }
             match action {
                 ScriptAction::Present { frame, scroll } => {
                     self.current = frame;
@@ -162,6 +168,7 @@ impl ScriptRunner {
                     events.push(ScriptEvent::Blank);
                 }
                 ScriptAction::WhileScroll(body) => {
+                    self.skip_until_while = false;
                     if self.scroll.is_some() {
                         let repeat = body.clone();
                         self.actions.splice(
@@ -170,6 +177,11 @@ impl ScriptRunner {
                                 .cloned()
                                 .chain(std::iter::once(ScriptAction::WhileScroll(repeat))),
                         );
+                    }
+                }
+                ScriptAction::CheckScroll => {
+                    if self.scroll.is_none() {
+                        self.skip_until_while = true;
                     }
                 }
             }

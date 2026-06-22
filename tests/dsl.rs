@@ -38,6 +38,12 @@ fn parses_nested_loop_for_scroll_duration() {
 }
 
 #[test]
+fn parses_while_scroll_and_check_scroll() {
+    let program = parse_program("while scroll\n wait 3s\n check scroll\nend").unwrap();
+    assert!(matches!(program.commands[0], Command::WhileScroll(_)));
+}
+
+#[test]
 fn reports_line_for_unknown_statement() {
     assert!(
         parse_program("wat 3s")
