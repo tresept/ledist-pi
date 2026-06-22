@@ -1,4 +1,4 @@
-backend = "simulator"
+backend = "matrix"
 bind = "0.0.0.0:3000"
 data_dir = "data"
 simulator_path = "data/simulator.png"
