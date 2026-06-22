@@ -122,3 +122,18 @@ async fn test_display_endpoint_requires_a_128_by_32_test_png() {
         .unwrap();
     assert_eq!(ok.status(), StatusCode::OK);
 }
+
+#[tokio::test]
+async fn blank_returns_service_unavailable_without_a_display_worker() {
+    let state = Arc::new(AppState::new(vec![]));
+    let app = web_router(state);
+    let response = app
+        .oneshot(
+            Request::post("/api/display/blank")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+}

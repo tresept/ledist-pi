@@ -350,9 +350,26 @@ fn validate_program(profile: &Profile, program: &Program) -> Result<(), String> 
     }
     commands(profile, &program.commands)
 }
-async fn blank(State(state): State<Arc<AppState>>) -> StatusCode {
+async fn blank(State(state): State<Arc<AppState>>) -> Result<StatusCode, (StatusCode, String)> {
+    state
+        .display
+        .as_ref()
+        .ok_or_else(|| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "display backend is unavailable".into(),
+            )
+        })?
+        .send(DisplayCommand::Blank)
+        .map_err(|_| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "display worker stopped".into(),
+            )
+        })?;
+    eprintln!("[blank] request sent to display worker");
     *state.current.lock().unwrap() = None;
-    StatusCode::NO_CONTENT
+    Ok(StatusCode::NO_CONTENT)
 }
 async fn display_state(State(state): State<Arc<AppState>>) -> Json<Option<DisplayState>> {
     Json(state.current_state())
