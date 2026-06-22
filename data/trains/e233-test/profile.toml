@@ -1,5 +1,5 @@
 [profile]
-id = "e233-7000"
+id = "e233-test"
 name = "E233系テスト表示用"
 description = "テスト表示用"
 canvas_width = 128
