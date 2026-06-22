@@ -4,5 +4,35 @@ loop
         set right_top destination_ja
         scroll right_bottom scroll_text
     end
+    wait 3s
+
+    while scroll
+        frame
+            set service service_en
+            set right_top destination_en
+        end
+        wait 3s
+        check scroll
+
+        frame
+            set service service_ja
+            set right_top destination_ja
+        end
+        wait 3s
+    end
     wait scroll_end
+
+    frame
+        set service service_ja
+        set right_top destination_ja
+        set right_bottom next_stop_ja
+    end
+    wait 3s
+
+    frame
+        set service service_en
+        set right_top destination_en
+        set right_bottom next_stop_en
+    end
+    wait 3s
 end

@@ -82,7 +82,7 @@ require_exact_size = true
 id = "scroll_text"
 label = "スクロール文章"
 type = "text"
-default = "停車駅：品川シーサイド、大井町、大崎、渋谷、新宿"
+default = "停車駅：端岡、坂出、宇多津、丸亀、讃岐塩屋、多度津、海岸寺、詫間、みの、高瀬、比地大、本山、観音寺"
 [[fields]]
 id = "scroll_speed"
 label = "スクロール速度"
