@@ -2,7 +2,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use ledist_pi::{AppState, Profile, web_router};
+use ledist_pi::{AppState, NullBackend, Profile, spawn_display_worker, web_router};
 use std::{fs, sync::Arc};
 use tower::ServiceExt;
 
@@ -92,7 +92,12 @@ require_exact_size=true
 #[tokio::test]
 async fn test_display_endpoint_requires_a_128_by_32_test_png() {
     let data = tempfile::tempdir().unwrap();
-    let state = Arc::new(AppState::new(vec![]).with_data_dir(data.path().join("trains")));
+    let display = spawn_display_worker(|| Ok(Box::new(NullBackend::default()))).unwrap();
+    let state = Arc::new(
+        AppState::new(vec![])
+            .with_data_dir(data.path().join("trains"))
+            .with_display(display),
+    );
     let app = web_router(state);
     let missing = app
         .clone()

@@ -3,7 +3,7 @@ use crate::MatrixSettings;
 use crate::RgbFrame;
 use anyhow::Result;
 use image::{ImageBuffer, Rgb};
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::mpsc, thread};
 
 /// A display backend is used only by its owning display loop.
 ///
@@ -13,6 +13,45 @@ pub trait DisplayBackend {
     fn present(&mut self, frame: &RgbFrame) -> Result<()>;
     fn set_brightness(&mut self, brightness: u8) -> Result<()>;
     fn blank(&mut self) -> Result<()>;
+}
+
+pub enum DisplayCommand {
+    Present(RgbFrame),
+    Blank,
+}
+
+pub fn spawn_display_worker<F>(create: F) -> anyhow::Result<mpsc::Sender<DisplayCommand>>
+where
+    F: FnOnce() -> Result<Box<dyn DisplayBackend>> + Send + 'static,
+{
+    let (sender, receiver) = mpsc::channel();
+    let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let mut backend = match create() {
+            Ok(backend) => {
+                let _ = ready_sender.send(Ok(()));
+                backend
+            }
+            Err(error) => {
+                let _ = ready_sender.send(Err(error.to_string()));
+                return;
+            }
+        };
+        while let Ok(command) = receiver.recv() {
+            let result = match command {
+                DisplayCommand::Present(frame) => backend.present(&frame),
+                DisplayCommand::Blank => backend.blank(),
+            };
+            if let Err(error) = result {
+                eprintln!("display error: {error:#}");
+            }
+        }
+    });
+    ready_receiver
+        .recv()
+        .map_err(|_| anyhow::anyhow!("display worker stopped during startup"))?
+        .map_err(anyhow::Error::msg)?;
+    Ok(sender)
 }
 
 #[derive(Default)]

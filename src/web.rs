@@ -1,4 +1,6 @@
-use crate::{AssetRegistry, Command, FrameOp, Profile, Program, parse_program};
+use crate::{
+    AssetRegistry, Command, DisplayCommand, FrameOp, Profile, Program, RgbFrame, parse_program,
+};
 use axum::{
     Json, Router,
     extract::{Path, State},
@@ -10,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, mpsc::Sender},
 };
 
 pub struct AppState {
@@ -18,6 +20,7 @@ pub struct AppState {
     assets: BTreeMap<String, AssetRegistry>,
     current: Mutex<Option<DisplayState>>,
     data_dir: PathBuf,
+    display: Option<Sender<DisplayCommand>>,
 }
 #[derive(Clone, Serialize)]
 pub struct DisplayState {
@@ -35,7 +38,12 @@ impl AppState {
             assets: BTreeMap::new(),
             current: Mutex::new(None),
             data_dir: PathBuf::from("data/trains"),
+            display: None,
         }
+    }
+    pub fn with_display(mut self, display: Sender<DisplayCommand>) -> Self {
+        self.display = Some(display);
+        self
     }
     pub fn with_data_dir(mut self, data_dir: impl Into<PathBuf>) -> Self {
         self.data_dir = data_dir.into();
@@ -205,6 +213,30 @@ async fn test_display(
             format!("data/test.png は128x32である必要があります（現在: {width}x{height}）"),
         ));
     }
+    let pixels = image::open(&path)
+        .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))?
+        .to_rgb8()
+        .into_raw();
+    let mut frame = RgbFrame::black(128, 32);
+    frame
+        .blit_rgb(0, 0, 128, 32, &pixels)
+        .map_err(|error| (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()))?;
+    state
+        .display
+        .as_ref()
+        .ok_or_else(|| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "display backend is unavailable".into(),
+            )
+        })?
+        .send(DisplayCommand::Present(frame))
+        .map_err(|_| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "display worker stopped".into(),
+            )
+        })?;
     Ok(StatusCode::OK)
 }
 

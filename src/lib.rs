@@ -11,7 +11,9 @@ mod web;
 pub use assets::AssetRegistry;
 #[cfg(feature = "hardware")]
 pub use display::MatrixBackend;
-pub use display::{DisplayBackend, NullBackend, SimulatorBackend};
+pub use display::{
+    DisplayBackend, DisplayCommand, NullBackend, SimulatorBackend, spawn_display_worker,
+};
 pub use dsl::{Command, FrameOp, Program, parse_program};
 pub use font::BdfFont;
 pub use frame::RgbFrame;
