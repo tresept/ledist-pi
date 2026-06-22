@@ -109,14 +109,17 @@ async fn index() -> Html<&'static str> {
     Html(include_str!("../web/index.html"))
 }
 async fn script() -> (
-    [(axum::http::header::HeaderName, &'static str); 1],
+    [(axum::http::header::HeaderName, &'static str); 2],
     &'static str,
 ) {
     (
-        [(
-            axum::http::header::CONTENT_TYPE,
-            "application/javascript; charset=utf-8",
-        )],
+        [
+            (
+                axum::http::header::CONTENT_TYPE,
+                "application/javascript; charset=utf-8",
+            ),
+            (axum::http::header::CACHE_CONTROL, "no-store"),
+        ],
         include_str!("../web/app.js"),
     )
 }
