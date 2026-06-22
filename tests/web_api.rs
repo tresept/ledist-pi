@@ -72,7 +72,12 @@ require_exact_size=true
 "#,
     )
     .unwrap();
-    let state = Arc::new(AppState::new(vec![profile]).with_data_dir(data.path()));
+    let display = spawn_display_worker(|| Ok(Box::new(NullBackend::default()))).unwrap();
+    let state = Arc::new(
+        AppState::new(vec![profile])
+            .with_data_dir(data.path())
+            .with_display(display),
+    );
     let app = web_router(state.clone());
     let assets = app
         .clone()

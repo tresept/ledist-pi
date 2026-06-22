@@ -17,6 +17,7 @@ pub trait DisplayBackend {
 
 pub enum DisplayCommand {
     Present(RgbFrame),
+    SetBrightness(u8),
     Blank,
 }
 
@@ -48,6 +49,10 @@ where
                         frame.as_rgb().len()
                     );
                     backend.present(&frame)
+                }
+                DisplayCommand::SetBrightness(brightness) => {
+                    eprintln!("[display] brightness request: {brightness}");
+                    backend.set_brightness(brightness)
                 }
                 DisplayCommand::Blank => {
                     eprintln!("[display] blank request");

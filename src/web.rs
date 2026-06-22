@@ -186,6 +186,29 @@ async fn apply(
     let program = parse_program(&req.program)
         .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e.to_string()))?;
     validate_program(profile, &program).map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
+    let frame = render_initial_frame(profile, &assets, values, &program)
+        .map_err(|e| (StatusCode::UNPROCESSABLE_ENTITY, e))?;
+    let display = state.display.as_ref().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "display backend is unavailable".into(),
+        )
+    })?;
+    display
+        .send(DisplayCommand::SetBrightness(req.brightness))
+        .map_err(|_| {
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "display worker stopped".into(),
+            )
+        })?;
+    display.send(DisplayCommand::Present(frame)).map_err(|_| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "display worker stopped".into(),
+        )
+    })?;
+    eprintln!("[apply] initial frame sent for {}", req.profile_id);
     let next = DisplayState {
         profile_id: req.profile_id,
         brightness: req.brightness,
@@ -193,6 +216,91 @@ async fn apply(
     };
     *state.current.lock().unwrap() = Some(next.clone());
     Ok(Json(next))
+}
+
+fn render_initial_frame(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    values: &serde_json::Map<String, serde_json::Value>,
+    program: &Program,
+) -> Result<RgbFrame, String> {
+    fn visit(
+        commands: &[Command],
+        profile: &Profile,
+        assets: &AssetRegistry,
+        values: &serde_json::Map<String, serde_json::Value>,
+        frame: &mut RgbFrame,
+    ) -> Result<bool, String> {
+        for command in commands {
+            match command {
+                Command::Frame(operations) => {
+                    let mut next = frame.clone();
+                    for operation in operations {
+                        match operation {
+                            FrameOp::Clear(region) => {
+                                let r = profile
+                                    .regions
+                                    .get(region)
+                                    .ok_or_else(|| format!("unknown region {region}"))?;
+                                next.clear_region(r.x, r.y, r.width, r.height);
+                            }
+                            FrameOp::Set(region, field) => {
+                                let r = profile
+                                    .regions
+                                    .get(region)
+                                    .ok_or_else(|| format!("unknown region {region}"))?;
+                                let definition = profile
+                                    .fields
+                                    .iter()
+                                    .find(|item| item.id == *field)
+                                    .ok_or_else(|| format!("unknown field {field}"))?;
+                                let directory =
+                                    definition.asset_dir.as_deref().ok_or_else(|| {
+                                        format!("field {field} is not an image asset")
+                                    })?;
+                                let id = values
+                                    .get(field)
+                                    .and_then(serde_json::Value::as_str)
+                                    .filter(|id| !id.is_empty())
+                                    .ok_or_else(|| {
+                                        format!("field {field} has no selected image")
+                                    })?;
+                                let (width, height, pixels) = assets
+                                    .load_rgb(directory, id)
+                                    .map_err(|error| error.to_string())?;
+                                if (width, height) != (r.width, r.height) {
+                                    return Err(format!(
+                                        "field {field}: expected {}x{}, got {width}x{height}",
+                                        r.width, r.height
+                                    ));
+                                }
+                                next.blit_rgb(r.x as isize, r.y as isize, width, height, &pixels)
+                                    .map_err(|error| error.to_string())?;
+                            }
+                            FrameOp::Scroll(_, _) => {}
+                        }
+                    }
+                    *frame = next;
+                    return Ok(true);
+                }
+                Command::Loop(_, body) if visit(body, profile, assets, values, frame)? => {
+                    return Ok(true);
+                }
+                Command::Blank => {
+                    *frame = RgbFrame::black(
+                        profile.profile.canvas_width,
+                        profile.profile.canvas_height,
+                    );
+                    return Ok(true);
+                }
+                _ => {}
+            }
+        }
+        Ok(false)
+    }
+    let mut frame = RgbFrame::black(profile.profile.canvas_width, profile.profile.canvas_height);
+    visit(&program.commands, profile, assets, values, &mut frame)?;
+    Ok(frame)
 }
 
 async fn test_display(
