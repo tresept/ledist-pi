@@ -1,16 +1,105 @@
+```html
 <!doctype html>
 <html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LEDist</title></head>
+<head>
+  <meta charset="utf-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1"
+  >
+  <title>LEDist</title>
+</head>
+
 <body>
-<h1>LEDist</h1>
-<label>車種 <select id="profile"></select></label>
-<label>テンプレート <select id="template"></select></label>
-<button id="load" type="button">テンプレートを読み込む</button>
-<p id="status">車種を選択してください。</p>
-<form id="form"></form>
-<label>表示シナリオ <textarea id="program" spellcheck="false"></textarea></label>
-<p><button id="apply" type="button">表示する</button> <button id="blank" type="button">消灯する</button> <button id="test" type="button">試験表示</button></p>
-<p id="message"></p>
-<script src="/app.js"></script>
+  <header>
+    <h1>LEDist</h1>
+    <p>車両側面LED表示器 制御画面</p>
+  </header>
+
+  <main>
+    <section aria-labelledby="profile-heading">
+      <h2 id="profile-heading">車種設定</h2>
+
+      <p>
+        <label for="profile">車種</label><br>
+        <select id="profile" name="profile">
+          <option value="">読み込み中...</option>
+        </select>
+      </p>
+
+      <p id="status" role="status">
+        車種を選択してください。
+      </p>
+    </section>
+
+    <section aria-labelledby="display-heading">
+      <h2 id="display-heading">表示内容</h2>
+
+      <form id="form">
+        <p>車種を選択すると設定項目が表示されます。</p>
+      </form>
+    </section>
+
+    <section aria-labelledby="template-heading">
+      <h2 id="template-heading">表示テンプレート</h2>
+
+      <p>
+        <label for="template">テンプレート</label><br>
+        <select id="template" name="template">
+          <option value="">テンプレートなし</option>
+        </select>
+      </p>
+
+      <p>
+        <button id="load" type="button">
+          テンプレートを読み込む
+        </button>
+      </p>
+    </section>
+
+    <section aria-labelledby="program-heading">
+      <h2 id="program-heading">表示シナリオ</h2>
+
+      <p>
+        <label for="program">
+          表示する領域、待機時間、スクロール処理を記述します。
+        </label>
+      </p>
+
+      <textarea
+        id="program"
+        name="program"
+        rows="24"
+        cols="72"
+        spellcheck="false"
+      >loop
+    blank
+    wait 3s
+end</textarea>
+    </section>
+
+    <section aria-labelledby="control-heading">
+      <h2 id="control-heading">実機操作</h2>
+
+      <p>
+        <button id="apply" type="button">
+          表示する
+        </button>
+
+        <button id="blank" type="button">
+          消灯する
+        </button>
+
+        <button id="test" type="button">
+          test.pngを試験表示
+        </button>
+      </p>
+
+      <p id="message" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
 </body>
 </html>
+```
