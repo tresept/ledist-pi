@@ -5,7 +5,7 @@ description = "埼京線・川越線用"
 canvas_width = 128
 canvas_height = 32
 default_brightness = 40
-default_template = "intermediate-through"
+default_template = "depart-station"
 
 [regions.service]
 x = 0
