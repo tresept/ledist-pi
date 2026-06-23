@@ -194,3 +194,83 @@ full-top=['assets/destination/128x16']
     };
     assert_eq!(frame.pixel(0, 0), Some([4, 5, 6]));
 }
+
+#[test]
+fn destination_without_a_full_asset_falls_back_to_the_right_80_by_32_asset() {
+    let root = tempfile::tempdir().unwrap();
+    let train = root.path().join("train");
+    fs::create_dir_all(train.join("assets/destination/80x32")).unwrap();
+    image::RgbImage::from_pixel(80, 32, image::Rgb([2, 4, 6]))
+        .save(train.join("assets/destination/80x32/shinjuku.png"))
+        .unwrap();
+    let profile = Profile::from_toml(
+        r#"
+[profile]
+id='e233'
+name='E233'
+[e233]
+[e233.assets.destination]
+label='行先'
+[e233.assets.destination.directories]
+full=['assets/destination/128x32']
+right=['assets/destination/80x32']
+right-top-ja=['assets/destination/80x16/ja']
+"#,
+    )
+    .unwrap();
+    let mut s = selection();
+    s.destination = FieldSelection::Asset("shinjuku".into());
+    let mut runner = compile_e233(
+        &profile,
+        &AssetRegistry::scan(&train).unwrap(),
+        &s,
+        root.path(),
+    )
+    .unwrap();
+    let events = runner.tick(Instant::now()).unwrap();
+    let ScriptEvent::Present(frame) = &events[0] else {
+        panic!("expected frame")
+    };
+    assert_eq!(frame.pixel(0, 0), Some([0, 0, 0]));
+    assert_eq!(frame.pixel(48, 0), Some([2, 4, 6]));
+}
+
+#[test]
+fn destination_without_full_or_right_asset_falls_back_to_the_right_top_asset() {
+    let root = tempfile::tempdir().unwrap();
+    let train = root.path().join("train");
+    fs::create_dir_all(train.join("assets/destination/80x16/ja")).unwrap();
+    image::RgbImage::from_pixel(80, 16, image::Rgb([3, 6, 9]))
+        .save(train.join("assets/destination/80x16/ja/shinjuku.png"))
+        .unwrap();
+    let profile = Profile::from_toml(
+        r#"
+[profile]
+id='e233'
+name='E233'
+[e233]
+[e233.assets.destination]
+label='行先'
+[e233.assets.destination.directories]
+full=['assets/destination/128x32']
+right=['assets/destination/80x32']
+right-top-ja=['assets/destination/80x16/ja']
+"#,
+    )
+    .unwrap();
+    let mut s = selection();
+    s.destination = FieldSelection::Asset("shinjuku".into());
+    let mut runner = compile_e233(
+        &profile,
+        &AssetRegistry::scan(&train).unwrap(),
+        &s,
+        root.path(),
+    )
+    .unwrap();
+    let events = runner.tick(Instant::now()).unwrap();
+    let ScriptEvent::Present(frame) = &events[0] else {
+        panic!("expected frame")
+    };
+    assert_eq!(frame.pixel(48, 0), Some([3, 6, 9]));
+    assert_eq!(frame.pixel(48, 16), Some([0, 0, 0]));
+}

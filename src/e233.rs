@@ -421,16 +421,53 @@ fn normal_pages(
     } else if s.next_stop.participates() {
         pages.push(full_split(profile, assets, config, s)?);
     } else {
-        pages.push(full_value(
+        pages.push(destination_single(profile, assets, config, &s.destination)?);
+    }
+    Ok(pages)
+}
+
+fn destination_single(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    destination: &FieldSelection,
+) -> Result<RgbFrame, String> {
+    let FieldSelection::Asset(id) = destination else {
+        return Err("行先を選択してください。".into());
+    };
+    if has_asset(assets, config, "destination", id, "full", FULL) {
+        return full_value(profile, assets, config, "destination", destination, "full");
+    }
+    let mut frame = RgbFrame::black(128, 32);
+    if has_asset(assets, config, "destination", id, "right", RIGHT_FULL) {
+        draw(
             profile,
             assets,
             config,
             "destination",
-            &s.destination,
-            "full",
-        )?);
+            destination,
+            "right",
+            RIGHT_FULL,
+            &mut frame,
+        )?;
+        return Ok(frame);
     }
-    Ok(pages)
+    if has_asset(assets, config, "destination", id, "right-top-ja", RIGHT_TOP) {
+        draw(
+            profile,
+            assets,
+            config,
+            "destination",
+            destination,
+            "right-top-ja",
+            RIGHT_TOP,
+            &mut frame,
+        )?;
+        return Ok(frame);
+    }
+    Err(format!(
+        "行先「{id}」には128x32、80x32、80x16のいずれの素材もありません。"
+    ))
 }
 
 fn scroll_prefix_pages(
