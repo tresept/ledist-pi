@@ -156,3 +156,41 @@ right=['assets/destination/80x32']
     };
     assert_eq!(frame.pixel(0, 0), Some([9, 8, 7]));
 }
+
+#[test]
+fn destination_without_service_or_scroll_uses_the_full_destination_curtain() {
+    let root = tempfile::tempdir().unwrap();
+    let train = root.path().join("train");
+    fs::create_dir_all(train.join("assets/destination/128x32")).unwrap();
+    image::RgbImage::from_pixel(128, 32, image::Rgb([4, 5, 6]))
+        .save(train.join("assets/destination/128x32/shinjuku.png"))
+        .unwrap();
+    let profile = Profile::from_toml(
+        r#"
+[profile]
+id='e233'
+name='E233'
+[e233]
+[e233.assets.destination]
+label='行先'
+[e233.assets.destination.directories]
+full=['assets/destination/128x32']
+full-top=['assets/destination/128x16']
+"#,
+    )
+    .unwrap();
+    let mut s = selection();
+    s.destination = FieldSelection::Asset("shinjuku".into());
+    let mut runner = compile_e233(
+        &profile,
+        &AssetRegistry::scan(&train).unwrap(),
+        &s,
+        root.path(),
+    )
+    .unwrap();
+    let events = runner.tick(Instant::now()).unwrap();
+    let ScriptEvent::Present(frame) = &events[0] else {
+        panic!("expected frame")
+    };
+    assert_eq!(frame.pixel(0, 0), Some([4, 5, 6]));
+}
