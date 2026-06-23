@@ -233,6 +233,28 @@ pub fn compile(
     plan(selection)?;
     let config = profile.e233.as_ref().ok_or("E233設定がありません")?;
     let duration = Duration::from_secs_f64(config.page_seconds);
+    if should_use_service_full(assets, config, &selection.service) {
+        let frame = full_value(
+            profile,
+            assets,
+            config,
+            "service",
+            &selection.service,
+            "full",
+        )?;
+        return Ok(ScriptRunner::new(
+            profile.profile.canvas_width,
+            profile.profile.canvas_height,
+            Vec::new(),
+            Some(vec![
+                ScriptAction::Present {
+                    frame,
+                    scroll: None,
+                },
+                ScriptAction::Wait(duration),
+            ]),
+        ));
+    }
     let mut actions = Vec::new();
     if selection.scroll_text.trim().is_empty() {
         for page in normal_pages(profile, assets, config, selection)? {
@@ -297,6 +319,43 @@ pub fn compile(
         Vec::new(),
         Some(actions),
     ))
+}
+
+/// Some special service types (for example 回送 and 試運転) only have a
+/// 128×32 service curtain.  A complete 48×32 Japanese/English pair is
+/// required before the normal split layouts are allowed.
+fn should_use_service_full(
+    assets: &AssetRegistry,
+    config: &E233Config,
+    service: &FieldSelection,
+) -> bool {
+    let FieldSelection::Asset(id) = service else {
+        return false;
+    };
+    has_asset(assets, config, "service", id, "full", FULL)
+        && !(has_asset(assets, config, "service", id, "left-ja", SERVICE_LEFT)
+            && has_asset(assets, config, "service", id, "left-en", SERVICE_LEFT))
+}
+
+fn has_asset(
+    assets: &AssetRegistry,
+    config: &E233Config,
+    group: &str,
+    id: &str,
+    slot: &str,
+    region: Region,
+) -> bool {
+    config
+        .assets
+        .get(group)
+        .and_then(|group| group.directories.get(slot))
+        .into_iter()
+        .flatten()
+        .any(|directory| {
+            assets
+                .load_rgb(directory, id)
+                .is_ok_and(|(width, height, _)| (width, height) == (region.width, region.height))
+        })
 }
 
 fn normal_pages(
