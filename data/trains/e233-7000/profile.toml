@@ -1,7 +1,7 @@
 [profile]
-id = "e233-7000"
-name = "E233系7000番台"
-description = "埼京線・川越線用。PNGはサイズ別ディレクトリに配置します。"
+id = "e233-9000"
+name = "E233系テスト用システム"
+description = "E233系LEDのテストROMです"
 canvas_width = 128
 canvas_height = 32
 default_brightness = 40
