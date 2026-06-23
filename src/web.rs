@@ -80,10 +80,15 @@ struct ApplyRequest {
     next_stop: Option<String>,
     #[serde(default)]
     scroll_text: String,
+    #[serde(default = "default_true")]
+    scroll_enabled: bool,
     #[serde(default)]
     scroll_speed: Option<f64>,
     #[serde(default)]
     scroll_cycle: Vec<ScrollCycleItem>,
+}
+fn default_true() -> bool {
+    true
 }
 fn selection(value: Option<String>) -> FieldSelection {
     match value.as_deref().map(str::trim) {
@@ -223,7 +228,10 @@ async fn apply(
             through_route: selection(req.through_route),
             destination: selection(req.destination),
             next_stop: selection(req.next_stop),
-            scroll_text: req.scroll_text,
+            scroll_text: req
+                .scroll_enabled
+                .then_some(req.scroll_text)
+                .unwrap_or_default(),
             scroll_speed,
             scroll_cycle: req.scroll_cycle,
             brightness: req.brightness,
