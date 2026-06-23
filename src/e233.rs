@@ -283,13 +283,6 @@ pub fn compile(
         }
     } else {
         let font = load_font(profile, data_root)?;
-        for frame in scroll_prefix_pages(profile, assets, config, selection)? {
-            actions.push(ScriptAction::Present {
-                frame,
-                scroll: None,
-            });
-            actions.push(ScriptAction::Wait(duration));
-        }
         let start = scroll_frame(
             profile,
             assets,
@@ -602,28 +595,6 @@ fn destination_single(
     ))
 }
 
-fn scroll_prefix_pages(
-    profile: &Profile,
-    assets: &AssetRegistry,
-    config: &E233Config,
-    s: &DisplaySelection,
-) -> Result<Vec<RgbFrame>, String> {
-    if s.service.participates() {
-        Ok(vec![
-            scroll_frame(profile, assets, config, s, &ScrollCycleItem::DestinationJa)?,
-            scroll_frame(profile, assets, config, s, &ScrollCycleItem::DestinationEn)?,
-        ])
-    } else {
-        Ok(vec![full_value(
-            profile,
-            assets,
-            config,
-            "destination",
-            &s.destination,
-            "full",
-        )?])
-    }
-}
 fn canonical_cycle(items: &[ScrollCycleItem]) -> Vec<ScrollCycleItem> {
     [
         ScrollCycleItem::DestinationJa,

@@ -358,8 +358,9 @@ fn scroll_cycle_shows_selected_normal_pages_after_it_finishes() {
     let font = "STARTFONT 2.1\nFONTBOUNDINGBOX 1 1 0 0\nSTARTCHAR A\nENCODING 65\nBBX 1 1 0 0\nBITMAP\n1\nENDCHAR\nENDFONT\n";
     fs::write(font_dir.join("shnmk16.bdf"), font).unwrap();
     fs::write(font_dir.join("shnm8x16a.bdf"), font).unwrap();
-    let profile =
+    let mut profile =
         Profile::from_toml(include_str!("../data/trains/e233-9000/profile.toml")).unwrap();
+    profile.scroll_defaults.as_mut().unwrap().start_padding = 80;
     let mut s = selection();
     s.service = FieldSelection::Asset("local".into());
     s.destination = FieldSelection::Asset("dest".into());
@@ -378,18 +379,20 @@ fn scroll_cycle_shows_selected_normal_pages_after_it_finishes() {
     .unwrap();
     let start = Instant::now();
     runner.tick(start).unwrap();
-    runner.tick(start + Duration::from_secs(3)).unwrap();
-    runner.tick(start + Duration::from_secs(6)).unwrap();
-    let next_ja = runner.tick(start + Duration::from_secs(9)).unwrap();
-    let next_en = runner.tick(start + Duration::from_secs(12)).unwrap();
-    let route_through = runner.tick(start + Duration::from_secs(15)).unwrap();
-    let change = runner.tick(start + Duration::from_secs(18)).unwrap();
-    let pixel = |events: Vec<ScriptEvent>, x, y| match events.last().unwrap() {
-        ScriptEvent::Present(frame) => frame.pixel(x, y),
-        _ => None,
+    let entering = runner.tick(start + Duration::from_millis(1)).unwrap();
+    let next_ja = runner.tick(start + Duration::from_secs(3)).unwrap();
+    let next_en = runner.tick(start + Duration::from_secs(6)).unwrap();
+    let route_through = runner.tick(start + Duration::from_secs(9)).unwrap();
+    let change = runner.tick(start + Duration::from_secs(12)).unwrap();
+    let pixel = |events: &[ScriptEvent], x, y| {
+        events.iter().rev().find_map(|event| match event {
+            ScriptEvent::Present(frame) => frame.pixel(x, y),
+            _ => None,
+        })
     };
-    assert_eq!(pixel(next_ja, 48, 16), Some([5, 0, 0]));
-    assert_eq!(pixel(next_en, 48, 16), Some([6, 0, 0]));
-    assert_eq!(pixel(route_through, 48, 16), Some([8, 0, 0]));
-    assert_eq!(pixel(change, 48, 0), Some([9, 0, 0]));
+    assert_eq!(pixel(&entering, 127, 16), Some([255, 208, 96]));
+    assert_eq!(pixel(&next_ja, 48, 16), Some([5, 0, 0]));
+    assert_eq!(pixel(&next_en, 48, 16), Some([6, 0, 0]));
+    assert_eq!(pixel(&route_through, 48, 16), Some([8, 0, 0]));
+    assert_eq!(pixel(&change, 48, 0), Some([9, 0, 0]));
 }
