@@ -329,6 +329,13 @@ pub fn compile(
         }
         actions.push(ScriptAction::WhileScroll(Arc::new(body)));
         actions.push(ScriptAction::WaitScrollEnd);
+        for frame in post_scroll_pages(profile, assets, config, selection)? {
+            actions.push(ScriptAction::Present {
+                frame,
+                scroll: None,
+            });
+            actions.push(ScriptAction::Wait(duration));
+        }
     }
     Ok(ScriptRunner::new(
         profile.profile.canvas_width,
@@ -454,6 +461,74 @@ fn normal_pages(
         pages.push(full_split(profile, assets, config, s)?);
     } else {
         pages.push(destination_single(profile, assets, config, &s.destination)?);
+    }
+    Ok(pages)
+}
+
+/// Pages shown after a scroll has completed.  The initial destination-only
+/// pages have already been shown before the scroll, so only the optional
+/// next-stop, route/through-route, and service-change pages belong here.
+fn post_scroll_pages(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+) -> Result<Vec<RgbFrame>, String> {
+    if !s.service.participates() {
+        return if s.next_stop.participates() {
+            Ok(vec![full_split(profile, assets, config, s)?])
+        } else {
+            Ok(Vec::new())
+        };
+    }
+    let mut pages = Vec::new();
+    if s.next_stop.participates() {
+        pages.push(split(
+            profile,
+            assets,
+            config,
+            s,
+            "left-ja",
+            "right-top-ja",
+            "right-bottom-ja",
+            "destination",
+            "next_stop",
+        )?);
+        pages.push(split(
+            profile,
+            assets,
+            config,
+            s,
+            "left-en",
+            "right-top-en",
+            "right-bottom-en",
+            "destination",
+            "next_stop",
+        )?);
+    }
+    if s.route.participates() && s.through_route.participates() {
+        pages.push(route_through_frame(profile, assets, config, s)?);
+    } else if s.route.participates() || s.through_route.participates() {
+        let (group, value) = if s.route.participates() {
+            ("route", &s.route)
+        } else {
+            ("through_route", &s.through_route)
+        };
+        pages.push(right_value(
+            profile, assets, config, &s.service, "left-ja", group, value, "right",
+        )?);
+    }
+    if s.service_change.participates() {
+        pages.push(right_value(
+            profile,
+            assets,
+            config,
+            &s.service,
+            "left-ja",
+            "service_change",
+            &s.service_change,
+            "right",
+        )?);
     }
     Ok(pages)
 }

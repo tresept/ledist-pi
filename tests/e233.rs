@@ -2,7 +2,10 @@ use ledist_pi::{
     AssetRegistry, E233DisplaySelection, E233Layout, FieldSelection, Profile, ScriptEvent,
     ScrollCycleItem, compile_e233, plan_e233,
 };
-use std::{fs, time::Instant};
+use std::{
+    fs,
+    time::{Duration, Instant},
+};
 
 fn selection() -> E233DisplaySelection {
     E233DisplaySelection {
@@ -328,4 +331,65 @@ left-en=['assets/service/48x32/en']
     };
     assert_eq!(frame.pixel(0, 0), Some([7, 7, 1]));
     assert_eq!(frame.pixel(48, 0), Some([0, 0, 0]));
+}
+
+#[test]
+fn scroll_cycle_shows_selected_normal_pages_after_it_finishes() {
+    let root = tempfile::tempdir().unwrap();
+    let train = root.path().join("train");
+    let image = |path: &str, width, height, color| {
+        let path = train.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        image::RgbImage::from_pixel(width, height, image::Rgb(color))
+            .save(path)
+            .unwrap();
+    };
+    image("assets/service/48x32/ja/local.png", 48, 32, [1, 0, 0]);
+    image("assets/service/48x32/en/local.png", 48, 32, [2, 0, 0]);
+    image("assets/destination/80x16/ja/dest.png", 80, 16, [3, 0, 0]);
+    image("assets/destination/80x16/en/dest.png", 80, 16, [4, 0, 0]);
+    image("assets/next-stop/80x16/ja/next.png", 80, 16, [5, 0, 0]);
+    image("assets/next-stop/80x16/en/next.png", 80, 16, [6, 0, 0]);
+    image("assets/route/80x16/route.png", 80, 16, [7, 0, 0]);
+    image("assets/through-route/80x16/through.png", 80, 16, [8, 0, 0]);
+    image("assets/service-change/80x32/change.png", 80, 32, [9, 0, 0]);
+    let font_dir = root.path().join("fonts/shinonome-mincho-16");
+    fs::create_dir_all(&font_dir).unwrap();
+    let font = "STARTFONT 2.1\nFONTBOUNDINGBOX 1 1 0 0\nSTARTCHAR A\nENCODING 65\nBBX 1 1 0 0\nBITMAP\n1\nENDCHAR\nENDFONT\n";
+    fs::write(font_dir.join("shnmk16.bdf"), font).unwrap();
+    fs::write(font_dir.join("shnm8x16a.bdf"), font).unwrap();
+    let profile =
+        Profile::from_toml(include_str!("../data/trains/e233-9000/profile.toml")).unwrap();
+    let mut s = selection();
+    s.service = FieldSelection::Asset("local".into());
+    s.destination = FieldSelection::Asset("dest".into());
+    s.next_stop = FieldSelection::Asset("next".into());
+    s.route = FieldSelection::Asset("route".into());
+    s.through_route = FieldSelection::Asset("through".into());
+    s.service_change = FieldSelection::Asset("change".into());
+    s.scroll_text = "A".into();
+    s.scroll_speed = 1_000.0;
+    let mut runner = compile_e233(
+        &profile,
+        &AssetRegistry::scan(&train).unwrap(),
+        &s,
+        root.path(),
+    )
+    .unwrap();
+    let start = Instant::now();
+    runner.tick(start).unwrap();
+    runner.tick(start + Duration::from_secs(3)).unwrap();
+    runner.tick(start + Duration::from_secs(6)).unwrap();
+    let next_ja = runner.tick(start + Duration::from_secs(9)).unwrap();
+    let next_en = runner.tick(start + Duration::from_secs(12)).unwrap();
+    let route_through = runner.tick(start + Duration::from_secs(15)).unwrap();
+    let change = runner.tick(start + Duration::from_secs(18)).unwrap();
+    let pixel = |events: Vec<ScriptEvent>, x, y| match events.last().unwrap() {
+        ScriptEvent::Present(frame) => frame.pixel(x, y),
+        _ => None,
+    };
+    assert_eq!(pixel(next_ja, 48, 16), Some([5, 0, 0]));
+    assert_eq!(pixel(next_en, 48, 16), Some([6, 0, 0]));
+    assert_eq!(pixel(route_through, 48, 16), Some([8, 0, 0]));
+    assert_eq!(pixel(change, 48, 0), Some([9, 0, 0]));
 }
