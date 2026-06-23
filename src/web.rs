@@ -85,6 +85,8 @@ struct ApplyRequest {
     #[serde(default)]
     scroll_speed: Option<f64>,
     #[serde(default)]
+    scroll_start_padding: Option<usize>,
+    #[serde(default)]
     scroll_cycle: Vec<ScrollCycleItem>,
 }
 fn default_true() -> bool {
@@ -221,6 +223,15 @@ async fn apply(
                 "scroll_speed must be 1..200".into(),
             ));
         }
+        if req
+            .scroll_start_padding
+            .is_some_and(|padding| padding > 512)
+        {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "scroll_start_padding must be 0..512".into(),
+            ));
+        }
         let selection = E233DisplaySelection {
             service: selection(req.service),
             route: selection(req.route),
@@ -233,6 +244,7 @@ async fn apply(
                 .then_some(req.scroll_text)
                 .unwrap_or_default(),
             scroll_speed,
+            scroll_start_padding: req.scroll_start_padding,
             scroll_cycle: req.scroll_cycle,
             brightness: req.brightness,
         };

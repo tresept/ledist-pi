@@ -37,6 +37,7 @@ pub struct DisplaySelection {
     pub next_stop: FieldSelection,
     pub scroll_text: String,
     pub scroll_speed: f64,
+    pub scroll_start_padding: Option<usize>,
     pub scroll_cycle: Vec<ScrollCycleItem>,
     pub brightness: u8,
 }
@@ -302,6 +303,9 @@ pub fn compile(
             region,
         )?;
         spec.speed_px_per_second = selection.scroll_speed;
+        if let Some(padding) = selection.scroll_start_padding {
+            spec.start_padding = padding;
+        }
         actions.push(ScriptAction::Present {
             frame: start,
             scroll: Some(spec),

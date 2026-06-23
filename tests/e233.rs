@@ -17,6 +17,7 @@ fn selection() -> E233DisplaySelection {
         next_stop: FieldSelection::None,
         scroll_text: String::new(),
         scroll_speed: 50.0,
+        scroll_start_padding: None,
         scroll_cycle: vec![
             ScrollCycleItem::DestinationJa,
             ScrollCycleItem::DestinationEn,
@@ -74,6 +75,7 @@ fn scroll_requires_destination() {
         next_stop: FieldSelection::None,
         scroll_text: "この電車は相鉄線へ直通します".into(),
         scroll_speed: 50.0,
+        scroll_start_padding: None,
         scroll_cycle: vec![ScrollCycleItem::DestinationJa],
         brightness: 40,
     };
