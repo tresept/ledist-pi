@@ -348,10 +348,13 @@ fn scroll_cycle_shows_selected_normal_pages_after_it_finishes() {
     image("assets/service/48x32/en/local.png", 48, 32, [2, 0, 0]);
     image("assets/destination/80x16/ja/dest.png", 80, 16, [3, 0, 0]);
     image("assets/destination/80x16/en/dest.png", 80, 16, [4, 0, 0]);
+    image("assets/destination/80x32/dest.png", 80, 32, [10, 0, 0]);
     image("assets/next-stop/80x16/ja/next.png", 80, 16, [5, 0, 0]);
     image("assets/next-stop/80x16/en/next.png", 80, 16, [6, 0, 0]);
     image("assets/route/80x16/route.png", 80, 16, [7, 0, 0]);
+    image("assets/route/80x32/route.png", 80, 32, [11, 0, 0]);
     image("assets/through-route/80x16/through.png", 80, 16, [8, 0, 0]);
+    image("assets/through-route/80x32/through.png", 80, 32, [12, 0, 0]);
     image("assets/service-change/80x32/change.png", 80, 32, [9, 0, 0]);
     let font_dir = root.path().join("fonts/shinonome-mincho-16");
     fs::create_dir_all(&font_dir).unwrap();
@@ -380,10 +383,12 @@ fn scroll_cycle_shows_selected_normal_pages_after_it_finishes() {
     let start = Instant::now();
     runner.tick(start).unwrap();
     let entering = runner.tick(start + Duration::from_millis(1)).unwrap();
-    let next_ja = runner.tick(start + Duration::from_secs(3)).unwrap();
-    let next_en = runner.tick(start + Duration::from_secs(6)).unwrap();
-    let route_through = runner.tick(start + Duration::from_secs(9)).unwrap();
-    let change = runner.tick(start + Duration::from_secs(12)).unwrap();
+    let destination = runner.tick(start + Duration::from_secs(3)).unwrap();
+    let through = runner.tick(start + Duration::from_secs(6)).unwrap();
+    let change = runner.tick(start + Duration::from_secs(9)).unwrap();
+    let route = runner.tick(start + Duration::from_secs(12)).unwrap();
+    let next_ja = runner.tick(start + Duration::from_secs(15)).unwrap();
+    let next_en = runner.tick(start + Duration::from_secs(18)).unwrap();
     let pixel = |events: &[ScriptEvent], x, y| {
         events.iter().rev().find_map(|event| match event {
             ScriptEvent::Present(frame) => frame.pixel(x, y),
@@ -391,8 +396,10 @@ fn scroll_cycle_shows_selected_normal_pages_after_it_finishes() {
         })
     };
     assert_eq!(pixel(&entering, 127, 16), Some([255, 208, 96]));
+    assert_eq!(pixel(&destination, 48, 0), Some([10, 0, 0]));
+    assert_eq!(pixel(&through, 48, 0), Some([12, 0, 0]));
+    assert_eq!(pixel(&change, 48, 0), Some([9, 0, 0]));
+    assert_eq!(pixel(&route, 48, 0), Some([11, 0, 0]));
     assert_eq!(pixel(&next_ja, 48, 16), Some([5, 0, 0]));
     assert_eq!(pixel(&next_en, 48, 16), Some([6, 0, 0]));
-    assert_eq!(pixel(&route_through, 48, 16), Some([8, 0, 0]));
-    assert_eq!(pixel(&change, 48, 0), Some([9, 0, 0]));
 }

@@ -475,6 +475,44 @@ fn post_scroll_pages(
         };
     }
     let mut pages = Vec::new();
+    pages.push(right(
+        profile,
+        assets,
+        config,
+        s,
+        "left-ja",
+        "destination",
+        "right",
+    )?);
+    if s.through_route.participates() {
+        pages.push(right_value(
+            profile,
+            assets,
+            config,
+            &s.service,
+            "left-ja",
+            "through_route",
+            &s.through_route,
+            "right",
+        )?);
+    }
+    if s.service_change.participates() {
+        pages.push(right_value(
+            profile,
+            assets,
+            config,
+            &s.service,
+            "left-ja",
+            "service_change",
+            &s.service_change,
+            "right",
+        )?);
+    }
+    if s.route.participates() {
+        pages.push(right_value(
+            profile, assets, config, &s.service, "left-ja", "route", &s.route, "right",
+        )?);
+    }
     if s.next_stop.participates() {
         pages.push(split(
             profile,
@@ -497,30 +535,6 @@ fn post_scroll_pages(
             "right-bottom-en",
             "destination",
             "next_stop",
-        )?);
-    }
-    if s.route.participates() && s.through_route.participates() {
-        pages.push(route_through_frame(profile, assets, config, s)?);
-    } else if s.route.participates() || s.through_route.participates() {
-        let (group, value) = if s.route.participates() {
-            ("route", &s.route)
-        } else {
-            ("through_route", &s.through_route)
-        };
-        pages.push(right_value(
-            profile, assets, config, &s.service, "left-ja", group, value, "right",
-        )?);
-    }
-    if s.service_change.participates() {
-        pages.push(right_value(
-            profile,
-            assets,
-            config,
-            &s.service,
-            "left-ja",
-            "service_change",
-            &s.service_change,
-            "right",
         )?);
     }
     Ok(pages)
