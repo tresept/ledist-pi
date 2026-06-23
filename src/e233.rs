@@ -233,7 +233,7 @@ pub fn compile(
     plan(selection)?;
     let config = profile.e233.as_ref().ok_or("E233設定がありません")?;
     let duration = Duration::from_secs_f64(config.page_seconds);
-    if should_use_service_full(assets, config, &selection.service) {
+    if should_use_service_full(assets, config, selection) {
         let frame = full_value(
             profile,
             assets,
@@ -327,14 +327,18 @@ pub fn compile(
 fn should_use_service_full(
     assets: &AssetRegistry,
     config: &E233Config,
-    service: &FieldSelection,
+    selection: &DisplaySelection,
 ) -> bool {
-    let FieldSelection::Asset(id) = service else {
+    let FieldSelection::Asset(id) = &selection.service else {
         return false;
     };
-    has_asset(assets, config, "service", id, "full", FULL)
-        && !(has_asset(assets, config, "service", id, "left-ja", SERVICE_LEFT)
-            && has_asset(assets, config, "service", id, "left-en", SERVICE_LEFT))
+    selection.scroll_text.trim().is_empty()
+        && !selection.destination.participates()
+        && !selection.route.participates()
+        && !selection.through_route.participates()
+        && !selection.service_change.participates()
+        && !selection.next_stop.participates()
+        && has_asset(assets, config, "service", id, "full", FULL)
 }
 
 fn has_asset(
@@ -414,9 +418,7 @@ fn normal_pages(
             }
         }
         if pages.is_empty() {
-            pages.push(full_value(
-                profile, assets, config, "service", &s.service, "full",
-            )?);
+            pages.push(service_single(profile, assets, config, &s.service)?);
         }
     } else if s.next_stop.participates() {
         pages.push(full_split(profile, assets, config, s)?);
@@ -424,6 +426,31 @@ fn normal_pages(
         pages.push(destination_single(profile, assets, config, &s.destination)?);
     }
     Ok(pages)
+}
+
+fn service_single(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    service: &FieldSelection,
+) -> Result<RgbFrame, String> {
+    if let FieldSelection::Asset(id) = service
+        && has_asset(assets, config, "service", id, "full", FULL)
+    {
+        return full_value(profile, assets, config, "service", service, "full");
+    }
+    let mut frame = RgbFrame::black(128, 32);
+    draw(
+        profile,
+        assets,
+        config,
+        "service",
+        service,
+        "left-ja",
+        SERVICE_LEFT,
+        &mut frame,
+    )?;
+    Ok(frame)
 }
 
 fn destination_single(
@@ -708,29 +735,55 @@ fn draw(
     let FieldSelection::Asset(id) = value else {
         return Ok(());
     };
-    let directories = config
+    let group_config = config
         .assets
         .get(group)
-        .ok_or_else(|| format!("{group} の素材設定がありません"))?
+        .ok_or_else(|| format!("{group} の素材設定がありません"))?;
+    let mut slots = vec![slot];
+    if let Some(alternate) = alternate_language_slot(slot) {
+        slots.push(alternate);
+    }
+    for candidate in slots {
+        if let Some(directories) = group_config.directories.get(candidate) {
+            for directory in directories {
+                if let Ok((w, h, pixels)) = assets.load_rgb(directory, id)
+                    && (w, h) == (region.width, region.height)
+                {
+                    frame
+                        .blit_rgb(region.x as isize, region.y as isize, w, h, &pixels)
+                        .map_err(|e| e.to_string())?;
+                    return Ok(());
+                }
+            }
+        }
+    }
+    if alternate_language_slot(slot).is_some() {
+        return Ok(());
+    }
+    let directories = group_config
         .directories
         .get(slot)
         .ok_or_else(|| format!("{group} に {slot} 用素材設定がありません"))?;
-    for directory in directories {
-        if let Ok((w, h, pixels)) = assets.load_rgb(directory, id)
-            && (w, h) == (region.width, region.height)
-        {
-            frame
-                .blit_rgb(region.x as isize, region.y as isize, w, h, &pixels)
-                .map_err(|e| e.to_string())?;
-            return Ok(());
-        }
-    }
     Err(format!(
         "{group} の「{id}」に {}x{} 素材がありません（{}）",
         region.width,
         region.height,
         directories.join(" → ")
     ))
+}
+
+fn alternate_language_slot(slot: &str) -> Option<&'static str> {
+    match slot {
+        "left-ja" => Some("left-en"),
+        "left-en" => Some("left-ja"),
+        "right-top-ja" => Some("right-top-en"),
+        "right-top-en" => Some("right-top-ja"),
+        "right-bottom-ja" => Some("right-bottom-en"),
+        "right-bottom-en" => Some("right-bottom-ja"),
+        "full-bottom-ja" => Some("full-bottom-en"),
+        "full-bottom-en" => Some("full-bottom-ja"),
+        _ => None,
+    }
 }
 fn load_font(profile: &Profile, data_root: &Path) -> Result<Arc<BdfFont>, String> {
     let defaults = profile

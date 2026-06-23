@@ -114,12 +114,16 @@ fn rejects_scroll_without_a_cycle_item_or_destination() {
 }
 
 #[test]
-fn service_with_only_a_128_by_32_asset_falls_back_to_a_service_only_page() {
+fn service_with_only_a_128_by_32_asset_is_black_in_a_composite_page() {
     let root = tempfile::tempdir().unwrap();
     let train = root.path().join("train");
     fs::create_dir_all(train.join("assets/service/128x32")).unwrap();
+    fs::create_dir_all(train.join("assets/destination/80x32")).unwrap();
     image::RgbImage::from_pixel(128, 32, image::Rgb([9, 8, 7]))
         .save(train.join("assets/service/128x32/out_of_service.png"))
+        .unwrap();
+    image::RgbImage::from_pixel(80, 32, image::Rgb([1, 2, 3]))
+        .save(train.join("assets/destination/80x32/shinjuku.png"))
         .unwrap();
     let profile = Profile::from_toml(
         r#"
@@ -154,7 +158,8 @@ right=['assets/destination/80x32']
     let ScriptEvent::Present(frame) = &events[0] else {
         panic!("expected frame")
     };
-    assert_eq!(frame.pixel(0, 0), Some([9, 8, 7]));
+    assert_eq!(frame.pixel(0, 0), Some([0, 0, 0]));
+    assert_eq!(frame.pixel(48, 0), Some([1, 2, 3]));
 }
 
 #[test]
@@ -273,4 +278,44 @@ right-top-ja=['assets/destination/80x16/ja']
     };
     assert_eq!(frame.pixel(48, 0), Some([3, 6, 9]));
     assert_eq!(frame.pixel(48, 16), Some([0, 0, 0]));
+}
+
+#[test]
+fn service_single_uses_english_left_asset_when_japanese_is_missing() {
+    let root = tempfile::tempdir().unwrap();
+    let train = root.path().join("train");
+    fs::create_dir_all(train.join("assets/service/48x32/en")).unwrap();
+    image::RgbImage::from_pixel(48, 32, image::Rgb([7, 7, 1]))
+        .save(train.join("assets/service/48x32/en/local.png"))
+        .unwrap();
+    let profile = Profile::from_toml(
+        r#"
+[profile]
+id='e233'
+name='E233'
+[e233]
+[e233.assets.service]
+label='種別'
+[e233.assets.service.directories]
+full=['assets/service/128x32']
+left-ja=['assets/service/48x32/ja']
+left-en=['assets/service/48x32/en']
+"#,
+    )
+    .unwrap();
+    let mut s = selection();
+    s.service = FieldSelection::Asset("local".into());
+    let mut runner = compile_e233(
+        &profile,
+        &AssetRegistry::scan(&train).unwrap(),
+        &s,
+        root.path(),
+    )
+    .unwrap();
+    let events = runner.tick(Instant::now()).unwrap();
+    let ScriptEvent::Present(frame) = &events[0] else {
+        panic!("expected frame")
+    };
+    assert_eq!(frame.pixel(0, 0), Some([7, 7, 1]));
+    assert_eq!(frame.pixel(48, 0), Some([0, 0, 0]));
 }
