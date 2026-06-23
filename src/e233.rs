@@ -7,6 +7,8 @@ use std::{path::Path, sync::Arc, time::Duration};
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum FieldSelection {
     None,
+    /// Kept for in-process compatibility. Web requests use an actual PNG such
+    /// as `無表示.png` instead of this variant.
     Blank,
     Asset(String),
 }
@@ -15,16 +17,30 @@ impl FieldSelection {
         !matches!(self, Self::None)
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScrollCycleItem {
+    DestinationJa,
+    DestinationEn,
+    Route,
+    ThroughRoute,
+}
+
 #[derive(Clone, Debug)]
 pub struct DisplaySelection {
     pub service: FieldSelection,
-    pub route: FieldSelection,
-    pub service_change: FieldSelection,
-    pub through_route: FieldSelection,
     pub destination: FieldSelection,
+    pub route: FieldSelection,
+    pub through_route: FieldSelection,
+    pub service_change: FieldSelection,
+    pub next_stop: FieldSelection,
     pub scroll_text: String,
+    pub scroll_speed: f64,
+    pub scroll_cycle: Vec<ScrollCycleItem>,
     pub brightness: u8,
 }
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Content {
     Blank,
@@ -53,326 +69,7 @@ pub struct DisplayPlan {
     pub pages: Vec<Page>,
 }
 
-pub fn plan(selection: &DisplaySelection) -> Result<DisplayPlan, String> {
-    let s = selection.service.participates();
-    let r = selection.route.participates();
-    let c = selection.service_change.participates();
-    let t = selection.through_route.participates();
-    let d = selection.destination.participates();
-    let m = !selection.scroll_text.trim().is_empty();
-    if t && m {
-        return Err("直通先路線名とスクロール文字は同時に使用できません。".into());
-    }
-    if d && c {
-        return Err("行先と種別変更は同時に使用できません。".into());
-    }
-    if m && !d && !r {
-        return Err("スクロール文字を表示する場合は、行先または路線名を選択してください。".into());
-    }
-    if c && !s {
-        return Err(
-            "種別変更を表示する場合は、種別または種別欄の「無表示」を選択してください。".into(),
-        );
-    }
-    let fixed = PageDuration::Fixed(Duration::from_secs(3));
-    let mut pages = Vec::new();
-    for (name, value) in [
-        ("destination", &selection.destination),
-        ("route", &selection.route),
-        ("through_route", &selection.through_route),
-        ("service_change", &selection.service_change),
-    ] {
-        if value.participates() {
-            let content = Content::Field(name, value.clone());
-            let layout = if s {
-                match name {
-                    // Route-name artwork is only valid in the upper-right
-                    // 80x16 slot; the bottom half stays black.
-                    "route" => Layout::ServiceAndRightSplit(
-                        Content::Field("service", selection.service.clone()),
-                        content,
-                        Content::Blank,
-                    ),
-                    _ => Layout::ServiceAndRight(
-                        Content::Field("service", selection.service.clone()),
-                        content,
-                    ),
-                }
-            } else {
-                Layout::Full(content)
-            };
-            pages.push(Page {
-                layout,
-                duration: fixed.clone(),
-            });
-        }
-    }
-    if pages.is_empty() && s {
-        pages.push(Page {
-            layout: Layout::Full(Content::Field("service", selection.service.clone())),
-            duration: fixed.clone(),
-        });
-    }
-    if m {
-        let top = if d {
-            Content::Field("destination", selection.destination.clone())
-        } else {
-            Content::Field("route", selection.route.clone())
-        };
-        let scroll = Content::Scroll(selection.scroll_text.trim().to_owned());
-        let layout = if s {
-            Layout::ServiceAndRightSplit(
-                Content::Field("service", selection.service.clone()),
-                top,
-                scroll,
-            )
-        } else {
-            Layout::FullWidthSplit(top, scroll)
-        };
-        pages.push(Page {
-            layout,
-            duration: PageDuration::UntilScrollEnd,
-        });
-    }
-    if pages.is_empty() {
-        return Err("表示する項目を選択してください。".into());
-    }
-    Ok(DisplayPlan { pages })
-}
-
-/// Turn an already-validated E233 page plan into the generic page executor.
-/// Assets are selected by ID, then resolved only inside the size-specific
-/// directories declared by the profile.  This keeps the HTTP API from ever
-/// accepting a path and makes fallback behaviour deterministic.
-pub fn compile(
-    profile: &Profile,
-    assets: &AssetRegistry,
-    selection: &DisplaySelection,
-    data_root: &Path,
-) -> Result<ScriptRunner, String> {
-    let plan = plan(selection)?;
-    let config = profile.e233.as_ref().ok_or("E233設定がありません")?;
-    let font = if selection.scroll_text.trim().is_empty() {
-        None
-    } else {
-        Some(load_font(profile, data_root)?)
-    };
-    let mut actions = Vec::new();
-    for page in plan.pages {
-        let mut frame =
-            RgbFrame::black(profile.profile.canvas_width, profile.profile.canvas_height);
-        let mut scroll = None;
-        match page.layout {
-            Layout::Full(content) => {
-                if let Content::Field("service", value) = &content {
-                    if !blit(
-                        profile, assets, config, "service", value, "full", FULL, &mut frame,
-                    )? {
-                        if !blit(
-                            profile,
-                            assets,
-                            config,
-                            "service",
-                            value,
-                            "left",
-                            SERVICE_LEFT,
-                            &mut frame,
-                        )? {
-                            return Err("種別素材は128x32または48x32で配置してください。".into());
-                        }
-                    }
-                } else {
-                    draw_content(profile, assets, config, &content, FULL, "full", &mut frame)?;
-                }
-            }
-            Layout::ServiceAndRight(service, right) => {
-                draw_content(
-                    profile,
-                    assets,
-                    config,
-                    &service,
-                    SERVICE_LEFT,
-                    "left",
-                    &mut frame,
-                )?;
-                draw_content(
-                    profile, assets, config, &right, RIGHT_FULL, "right", &mut frame,
-                )?;
-            }
-            Layout::ServiceAndRightSplit(service, top, bottom) => {
-                draw_content(
-                    profile,
-                    assets,
-                    config,
-                    &service,
-                    SERVICE_LEFT,
-                    "left",
-                    &mut frame,
-                )?;
-                draw_content(
-                    profile,
-                    assets,
-                    config,
-                    &top,
-                    RIGHT_TOP,
-                    "right-top",
-                    &mut frame,
-                )?;
-                match bottom {
-                    Content::Scroll(text) => {
-                        scroll = Some(scroll_spec(profile, font.as_ref(), text, RIGHT_BOTTOM)?)
-                    }
-                    other => draw_content(
-                        profile,
-                        assets,
-                        config,
-                        &other,
-                        RIGHT_BOTTOM,
-                        "right-bottom",
-                        &mut frame,
-                    )?,
-                }
-            }
-            Layout::FullWidthSplit(top, bottom) => {
-                draw_content(
-                    profile, assets, config, &top, FULL_TOP, "full-top", &mut frame,
-                )?;
-                match bottom {
-                    Content::Scroll(text) => {
-                        scroll = Some(scroll_spec(profile, font.as_ref(), text, FULL_BOTTOM)?)
-                    }
-                    other => draw_content(
-                        profile,
-                        assets,
-                        config,
-                        &other,
-                        FULL_BOTTOM,
-                        "full-bottom",
-                        &mut frame,
-                    )?,
-                }
-            }
-        }
-        actions.push(ScriptAction::Present { frame, scroll });
-        match page.duration {
-            PageDuration::Fixed(_) => actions.push(ScriptAction::Wait(Duration::from_secs_f64(
-                config.page_seconds,
-            ))),
-            PageDuration::UntilScrollEnd => actions.push(ScriptAction::WaitScrollEnd),
-        }
-    }
-    Ok(ScriptRunner::new(
-        profile.profile.canvas_width,
-        profile.profile.canvas_height,
-        Vec::new(),
-        Some(actions),
-    ))
-}
-
-fn draw_content(
-    profile: &Profile,
-    assets: &AssetRegistry,
-    config: &E233Config,
-    content: &Content,
-    region: Region,
-    slot: &str,
-    frame: &mut RgbFrame,
-) -> Result<(), String> {
-    if let Content::Field(group, value) = content {
-        if value.participates()
-            && !blit(profile, assets, config, group, value, slot, region, frame)?
-        {
-            return Err(format!("{group} の素材を表示できません"));
-        }
-    }
-    Ok(())
-}
-
-fn blit(
-    _profile: &Profile,
-    assets: &AssetRegistry,
-    config: &E233Config,
-    group: &str,
-    value: &FieldSelection,
-    slot: &str,
-    region: Region,
-    frame: &mut RgbFrame,
-) -> Result<bool, String> {
-    let FieldSelection::Asset(id) = value else {
-        return Ok(false);
-    };
-    let group_config = config
-        .assets
-        .get(group)
-        .ok_or_else(|| format!("{group} の素材設定がありません"))?;
-    let directories = group_config
-        .directories
-        .get(slot)
-        .ok_or_else(|| format!("{group} に {slot} 用素材設定がありません"))?;
-    for directory in directories {
-        if let Ok((w, h, pixels)) = assets.load_rgb(directory, id) {
-            if (w, h) == (region.width, region.height) {
-                frame
-                    .blit_rgb(region.x as isize, region.y as isize, w, h, &pixels)
-                    .map_err(|e| e.to_string())?;
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
-}
-
-fn load_font(profile: &Profile, data_root: &Path) -> Result<Arc<BdfFont>, String> {
-    let defaults = profile
-        .scroll_defaults
-        .as_ref()
-        .ok_or("scroll_defaultsがありません")?;
-    let path = data_root.join("fonts").join(&defaults.font);
-    let mut font = BdfFont::parse_bdf(
-        &std::fs::read_to_string(path.join("shnmk16.bdf")).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
-    font.merge_fallback(
-        BdfFont::parse_bdf(
-            &std::fs::read_to_string(path.join("shnm8x16a.bdf")).map_err(|e| e.to_string())?,
-        )
-        .map_err(|e| e.to_string())?,
-    );
-    Ok(Arc::new(font))
-}
-
-pub(crate) fn scroll_spec(
-    profile: &Profile,
-    font: Option<&Arc<BdfFont>>,
-    text: String,
-    region: Region,
-) -> Result<ScrollSpec, String> {
-    let defaults = profile
-        .scroll_defaults
-        .as_ref()
-        .ok_or("scroll_defaultsがありません")?;
-    let color = defaults
-        .color
-        .strip_prefix('#')
-        .ok_or("色は#RRGGBBで指定してください")?;
-    if color.len() != 6 {
-        return Err("色は#RRGGBBで指定してください".into());
-    }
-    Ok(ScrollSpec {
-        region,
-        text,
-        font: font.ok_or("スクロールフォントを読み込めません")?.clone(),
-        color: [
-            u8::from_str_radix(&color[0..2], 16).map_err(|_| "色が不正です")?,
-            u8::from_str_radix(&color[2..4], 16).map_err(|_| "色が不正です")?,
-            u8::from_str_radix(&color[4..6], 16).map_err(|_| "色が不正です")?,
-        ],
-        speed_px_per_second: defaults.speed_px_per_second,
-        start_padding: defaults.start_padding,
-        end_padding: defaults.end_padding,
-        repeat: false,
-    })
-}
+const FIXED: Duration = Duration::from_secs(3);
 pub const FULL: Region = Region {
     x: 0,
     y: 0,
@@ -415,3 +112,577 @@ pub const FULL_BOTTOM: Region = Region {
     width: 128,
     height: 16,
 };
+
+/// Public summary used by validation tests and API diagnostics.
+pub fn plan(selection: &DisplaySelection) -> Result<DisplayPlan, String> {
+    if !selection.service.participates() && !selection.destination.participates() {
+        return Err("種別または行先を選択してください。".into());
+    }
+    if !selection.service.participates()
+        && (selection.route.participates()
+            || selection.through_route.participates()
+            || selection.service_change.participates())
+    {
+        return Err("路線名・直通先路線名・種別変更は種別と一緒に表示してください。".into());
+    }
+    if !selection.scroll_text.trim().is_empty() && !selection.destination.participates() {
+        return Err("スクロール文字を表示するには行先を選択してください。".into());
+    }
+    if !selection.scroll_text.trim().is_empty() && selection.scroll_cycle.is_empty() {
+        return Err("スクロール中に切り替える項目を1つ以上選択してください。".into());
+    }
+    let service = |language| Content::Field(language, selection.service.clone());
+    let mut pages = Vec::new();
+    if !selection.scroll_text.trim().is_empty() {
+        if selection.service.participates() {
+            pages.push(Page {
+                layout: Layout::ServiceAndRightSplit(
+                    service("service_ja"),
+                    Content::Field("destination_ja", selection.destination.clone()),
+                    Content::Scroll(selection.scroll_text.clone()),
+                ),
+                duration: PageDuration::UntilScrollEnd,
+            });
+        } else {
+            pages.push(Page {
+                layout: Layout::FullWidthSplit(
+                    Content::Field("destination_full_top", selection.destination.clone()),
+                    Content::Scroll(selection.scroll_text.clone()),
+                ),
+                duration: PageDuration::UntilScrollEnd,
+            });
+        }
+        return Ok(DisplayPlan { pages });
+    }
+    if selection.service.participates() {
+        if selection.destination.participates() {
+            if selection.next_stop.participates() {
+                pages.push(Page {
+                    layout: Layout::ServiceAndRightSplit(
+                        service("service_ja"),
+                        Content::Field("destination_ja", selection.destination.clone()),
+                        Content::Field("next_stop_ja", selection.next_stop.clone()),
+                    ),
+                    duration: PageDuration::Fixed(FIXED),
+                });
+                pages.push(Page {
+                    layout: Layout::ServiceAndRightSplit(
+                        service("service_en"),
+                        Content::Field("destination_en", selection.destination.clone()),
+                        Content::Field("next_stop_en", selection.next_stop.clone()),
+                    ),
+                    duration: PageDuration::Fixed(FIXED),
+                });
+            } else {
+                pages.push(Page {
+                    layout: Layout::ServiceAndRight(
+                        service("service_ja"),
+                        Content::Field("destination_right", selection.destination.clone()),
+                    ),
+                    duration: PageDuration::Fixed(FIXED),
+                });
+            }
+        }
+        for (name, value) in [
+            ("route_right", &selection.route),
+            ("through_route_right", &selection.through_route),
+            ("service_change_right", &selection.service_change),
+        ] {
+            if value.participates() {
+                pages.push(Page {
+                    layout: Layout::ServiceAndRight(
+                        service("service_ja"),
+                        Content::Field(name, value.clone()),
+                    ),
+                    duration: PageDuration::Fixed(FIXED),
+                });
+            }
+        }
+        if pages.is_empty() {
+            pages.push(Page {
+                layout: Layout::Full(Content::Field("service_full", selection.service.clone())),
+                duration: PageDuration::Fixed(FIXED),
+            });
+        }
+    } else if selection.next_stop.participates() {
+        pages.push(Page {
+            layout: Layout::FullWidthSplit(
+                Content::Field("destination_full_top", selection.destination.clone()),
+                Content::Field("next_stop_full_bottom", selection.next_stop.clone()),
+            ),
+            duration: PageDuration::Fixed(FIXED),
+        });
+    } else {
+        pages.push(Page {
+            layout: Layout::Full(Content::Field(
+                "destination_full",
+                selection.destination.clone(),
+            )),
+            duration: PageDuration::Fixed(FIXED),
+        });
+    }
+    Ok(DisplayPlan { pages })
+}
+
+pub fn compile(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    selection: &DisplaySelection,
+    data_root: &Path,
+) -> Result<ScriptRunner, String> {
+    plan(selection)?;
+    let config = profile.e233.as_ref().ok_or("E233設定がありません")?;
+    let duration = Duration::from_secs_f64(config.page_seconds);
+    let mut actions = Vec::new();
+    if selection.scroll_text.trim().is_empty() {
+        for page in normal_pages(profile, assets, config, selection)? {
+            actions.push(ScriptAction::Present {
+                frame: page,
+                scroll: None,
+            });
+            actions.push(ScriptAction::Wait(duration));
+        }
+    } else {
+        let font = load_font(profile, data_root)?;
+        for frame in scroll_prefix_pages(profile, assets, config, selection)? {
+            actions.push(ScriptAction::Present {
+                frame,
+                scroll: None,
+            });
+            actions.push(ScriptAction::Wait(duration));
+        }
+        let start = scroll_frame(
+            profile,
+            assets,
+            config,
+            selection,
+            &ScrollCycleItem::DestinationJa,
+        )?;
+        let region = if selection.service.participates() {
+            RIGHT_BOTTOM
+        } else {
+            FULL_BOTTOM
+        };
+        let mut spec = scroll_spec(
+            profile,
+            Some(&font),
+            selection.scroll_text.trim().to_owned(),
+            region,
+        )?;
+        spec.speed_px_per_second = selection.scroll_speed;
+        actions.push(ScriptAction::Present {
+            frame: start,
+            scroll: Some(spec),
+        });
+        actions.push(ScriptAction::Wait(duration));
+        let mut body = Vec::new();
+        for item in canonical_cycle(&selection.scroll_cycle) {
+            if let Some(frame) = scroll_cycle_frame(profile, assets, config, selection, &item)? {
+                body.push(ScriptAction::Present {
+                    frame,
+                    scroll: None,
+                });
+                body.push(ScriptAction::Wait(duration));
+            }
+        }
+        if body.is_empty() {
+            return Err("スクロール中に表示できる切替項目がありません。".into());
+        }
+        actions.push(ScriptAction::WhileScroll(Arc::new(body)));
+        actions.push(ScriptAction::WaitScrollEnd);
+    }
+    Ok(ScriptRunner::new(
+        profile.profile.canvas_width,
+        profile.profile.canvas_height,
+        Vec::new(),
+        Some(actions),
+    ))
+}
+
+fn normal_pages(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+) -> Result<Vec<RgbFrame>, String> {
+    let mut pages = Vec::new();
+    if s.service.participates() {
+        if s.destination.participates() {
+            if s.next_stop.participates() {
+                pages.push(split(
+                    profile,
+                    assets,
+                    config,
+                    s,
+                    "left-ja",
+                    "right-top-ja",
+                    "right-bottom-ja",
+                    "destination",
+                    "next_stop",
+                )?);
+                pages.push(split(
+                    profile,
+                    assets,
+                    config,
+                    s,
+                    "left-en",
+                    "right-top-en",
+                    "right-bottom-en",
+                    "destination",
+                    "next_stop",
+                )?);
+            } else {
+                pages.push(right(
+                    profile,
+                    assets,
+                    config,
+                    s,
+                    "left-ja",
+                    "destination",
+                    "right",
+                )?);
+            }
+        }
+        for (group, value) in [
+            ("route", &s.route),
+            ("through_route", &s.through_route),
+            ("service_change", &s.service_change),
+        ] {
+            if value.participates() {
+                pages.push(right_value(
+                    profile, assets, config, &s.service, "left-ja", group, value, "right",
+                )?);
+            }
+        }
+        if pages.is_empty() {
+            pages.push(full_value(
+                profile, assets, config, "service", &s.service, "full",
+            )?);
+        }
+    } else if s.next_stop.participates() {
+        pages.push(full_split(profile, assets, config, s)?);
+    } else {
+        pages.push(full_value(
+            profile,
+            assets,
+            config,
+            "destination",
+            &s.destination,
+            "full",
+        )?);
+    }
+    Ok(pages)
+}
+
+fn scroll_prefix_pages(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+) -> Result<Vec<RgbFrame>, String> {
+    if s.service.participates() {
+        Ok(vec![
+            scroll_frame(profile, assets, config, s, &ScrollCycleItem::DestinationJa)?,
+            scroll_frame(profile, assets, config, s, &ScrollCycleItem::DestinationEn)?,
+        ])
+    } else {
+        Ok(vec![full_value(
+            profile,
+            assets,
+            config,
+            "destination",
+            &s.destination,
+            "full",
+        )?])
+    }
+}
+fn canonical_cycle(items: &[ScrollCycleItem]) -> Vec<ScrollCycleItem> {
+    [
+        ScrollCycleItem::DestinationJa,
+        ScrollCycleItem::DestinationEn,
+        ScrollCycleItem::Route,
+        ScrollCycleItem::ThroughRoute,
+    ]
+    .into_iter()
+    .filter(|item| items.contains(item))
+    .collect()
+}
+fn scroll_cycle_frame(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+    item: &ScrollCycleItem,
+) -> Result<Option<RgbFrame>, String> {
+    match item {
+        ScrollCycleItem::Route if !s.route.participates() => Ok(None),
+        ScrollCycleItem::ThroughRoute if !s.through_route.participates() => Ok(None),
+        _ => scroll_frame(profile, assets, config, s, item).map(Some),
+    }
+}
+fn scroll_frame(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+    item: &ScrollCycleItem,
+) -> Result<RgbFrame, String> {
+    if !s.service.participates() {
+        return full_value(
+            profile,
+            assets,
+            config,
+            "destination",
+            &s.destination,
+            "full-top",
+        );
+    }
+    let (service_slot, group, value, slot) = match item {
+        ScrollCycleItem::DestinationJa => {
+            ("left-ja", "destination", &s.destination, "right-top-ja")
+        }
+        ScrollCycleItem::DestinationEn => {
+            ("left-en", "destination", &s.destination, "right-top-en")
+        }
+        ScrollCycleItem::Route => ("left-ja", "route", &s.route, "right-top"),
+        ScrollCycleItem::ThroughRoute => {
+            ("left-ja", "through_route", &s.through_route, "right-top")
+        }
+    };
+    let mut frame = RgbFrame::black(128, 32);
+    draw(
+        profile,
+        assets,
+        config,
+        "service",
+        &s.service,
+        service_slot,
+        SERVICE_LEFT,
+        &mut frame,
+    )?;
+    draw(
+        profile, assets, config, group, value, slot, RIGHT_TOP, &mut frame,
+    )?;
+    Ok(frame)
+}
+fn right(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+    service_slot: &str,
+    group: &str,
+    slot: &str,
+) -> Result<RgbFrame, String> {
+    right_value(
+        profile,
+        assets,
+        config,
+        &s.service,
+        service_slot,
+        group,
+        &s.destination,
+        slot,
+    )
+}
+fn right_value(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    service: &FieldSelection,
+    service_slot: &str,
+    group: &str,
+    value: &FieldSelection,
+    slot: &str,
+) -> Result<RgbFrame, String> {
+    let mut frame = RgbFrame::black(128, 32);
+    draw(
+        profile,
+        assets,
+        config,
+        "service",
+        service,
+        service_slot,
+        SERVICE_LEFT,
+        &mut frame,
+    )?;
+    draw(
+        profile, assets, config, group, value, slot, RIGHT_FULL, &mut frame,
+    )?;
+    Ok(frame)
+}
+fn split(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+    service_slot: &str,
+    destination_slot: &str,
+    next_slot: &str,
+    destination_group: &str,
+    next_group: &str,
+) -> Result<RgbFrame, String> {
+    let mut frame = RgbFrame::black(128, 32);
+    draw(
+        profile,
+        assets,
+        config,
+        "service",
+        &s.service,
+        service_slot,
+        SERVICE_LEFT,
+        &mut frame,
+    )?;
+    draw(
+        profile,
+        assets,
+        config,
+        destination_group,
+        &s.destination,
+        destination_slot,
+        RIGHT_TOP,
+        &mut frame,
+    )?;
+    draw(
+        profile,
+        assets,
+        config,
+        next_group,
+        &s.next_stop,
+        next_slot,
+        RIGHT_BOTTOM,
+        &mut frame,
+    )?;
+    Ok(frame)
+}
+fn full_split(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+) -> Result<RgbFrame, String> {
+    let mut frame = RgbFrame::black(128, 32);
+    draw(
+        profile,
+        assets,
+        config,
+        "destination",
+        &s.destination,
+        "full-top",
+        FULL_TOP,
+        &mut frame,
+    )?;
+    draw(
+        profile,
+        assets,
+        config,
+        "next_stop",
+        &s.next_stop,
+        "full-bottom-ja",
+        FULL_BOTTOM,
+        &mut frame,
+    )?;
+    Ok(frame)
+}
+fn full_value(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    group: &str,
+    value: &FieldSelection,
+    slot: &str,
+) -> Result<RgbFrame, String> {
+    let mut frame = RgbFrame::black(128, 32);
+    let region = if slot == "full" { FULL } else { FULL_TOP };
+    draw(
+        profile, assets, config, group, value, slot, region, &mut frame,
+    )?;
+    Ok(frame)
+}
+fn draw(
+    _profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    group: &str,
+    value: &FieldSelection,
+    slot: &str,
+    region: Region,
+    frame: &mut RgbFrame,
+) -> Result<(), String> {
+    let FieldSelection::Asset(id) = value else {
+        return Ok(());
+    };
+    let directories = config
+        .assets
+        .get(group)
+        .ok_or_else(|| format!("{group} の素材設定がありません"))?
+        .directories
+        .get(slot)
+        .ok_or_else(|| format!("{group} に {slot} 用素材設定がありません"))?;
+    for directory in directories {
+        if let Ok((w, h, pixels)) = assets.load_rgb(directory, id)
+            && (w, h) == (region.width, region.height)
+        {
+            frame
+                .blit_rgb(region.x as isize, region.y as isize, w, h, &pixels)
+                .map_err(|e| e.to_string())?;
+            return Ok(());
+        }
+    }
+    Err(format!(
+        "{group} の「{id}」に {}x{} 素材がありません（{}）",
+        region.width,
+        region.height,
+        directories.join(" → ")
+    ))
+}
+fn load_font(profile: &Profile, data_root: &Path) -> Result<Arc<BdfFont>, String> {
+    let defaults = profile
+        .scroll_defaults
+        .as_ref()
+        .ok_or("scroll_defaultsがありません")?;
+    let path = data_root.join("fonts").join(&defaults.font);
+    let mut font = BdfFont::parse_bdf(
+        &std::fs::read_to_string(path.join("shnmk16.bdf")).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    font.merge_fallback(
+        BdfFont::parse_bdf(
+            &std::fs::read_to_string(path.join("shnm8x16a.bdf")).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?,
+    );
+    Ok(Arc::new(font))
+}
+pub(crate) fn scroll_spec(
+    profile: &Profile,
+    font: Option<&Arc<BdfFont>>,
+    text: String,
+    region: Region,
+) -> Result<ScrollSpec, String> {
+    let defaults = profile
+        .scroll_defaults
+        .as_ref()
+        .ok_or("scroll_defaultsがありません")?;
+    let color = defaults
+        .color
+        .strip_prefix('#')
+        .ok_or("色は#RRGGBBで指定してください")?;
+    if color.len() != 6 {
+        return Err("色は#RRGGBBで指定してください".into());
+    }
+    Ok(ScrollSpec {
+        region,
+        text,
+        font: font.ok_or("スクロールフォントを読み込めません")?.clone(),
+        color: [
+            u8::from_str_radix(&color[0..2], 16).map_err(|_| "色が不正です")?,
+            u8::from_str_radix(&color[2..4], 16).map_err(|_| "色が不正です")?,
+            u8::from_str_radix(&color[4..6], 16).map_err(|_| "色が不正です")?,
+        ],
+        speed_px_per_second: defaults.speed_px_per_second,
+        start_padding: defaults.start_padding,
+        end_padding: defaults.end_padding,
+        repeat: false,
+    })
+}

@@ -1,0 +1,59 @@
+[profile]
+id = "e233-9000"
+name = "E233系テスト用システム"
+description = "E233系共通表示構成。PNGはサイズ別ディレクトリへ配置します。"
+canvas_width = 128
+canvas_height = 32
+default_brightness = 40
+
+[e233]
+page_seconds = 3.0
+
+[e233.assets.service]
+label = "種別"
+[e233.assets.service.directories]
+full = ["assets/service/128x32"]
+left-ja = ["assets/service/48x32/ja"]
+left-en = ["assets/service/48x32/en"]
+
+[e233.assets.destination]
+label = "行先"
+[e233.assets.destination.directories]
+full = ["assets/destination/128x32"]
+right = ["assets/destination/80x32"]
+right-top-ja = ["assets/destination/80x16/ja"]
+right-top-en = ["assets/destination/80x16/en"]
+full-top = ["assets/destination/128x16"]
+
+[e233.assets.route]
+label = "路線名表示"
+[e233.assets.route.directories]
+right = ["assets/route/80x32"]
+right-top = ["assets/route/80x16"]
+
+[e233.assets.through_route]
+label = "直通先路線名"
+[e233.assets.through_route.directories]
+right = ["assets/through-route/80x32"]
+right-top = ["assets/through-route/80x16"]
+
+[e233.assets.service_change]
+label = "種別変更"
+[e233.assets.service_change.directories]
+right = ["assets/service-change/80x32"]
+
+[e233.assets.next_stop]
+label = "次駅"
+[e233.assets.next_stop.directories]
+right-bottom-ja = ["assets/next-stop/80x16/ja"]
+right-bottom-en = ["assets/next-stop/80x16/en"]
+full-bottom-ja = ["assets/next-stop/128x16/ja"]
+full-bottom-en = ["assets/next-stop/128x16/en"]
+
+[scroll_defaults]
+font = "shinonome-mincho-16"
+color = "#ffd060"
+speed_px_per_second = 50.0
+start_padding = 80
+end_padding = 80
+repeat = false

@@ -18,14 +18,16 @@ default_brightness=40
 [e233.assets.service]
 label='種別'
 [e233.assets.service.directories]
-full=['assets/service/full']
-left=['assets/service/left']
+full=['assets/service/128x32']
+left-ja=['assets/service/48x32/ja']
+left-en=['assets/service/48x32/en']
 [e233.assets.route]
 label='路線名'
 [e233.assets.route.directories]
 full=['assets/route/full']
 full-top=['assets/route/full-top']
-right-top=['assets/route/right-top']
+right=['assets/route/80x32']
+right-top=['assets/route/80x16']
 [e233.assets.service_change]
 label='種別変更'
 [e233.assets.service_change.directories]
@@ -33,16 +35,23 @@ right=['assets/service-change/right']
 [e233.assets.through_route]
 label='直通先'
 [e233.assets.through_route.directories]
-full=['assets/through-route/full']
-right=['assets/through-route/right']
-right-bottom=['assets/through-route/right-bottom']
+right=['assets/through-route/80x32']
+right-top=['assets/through-route/80x16']
 [e233.assets.destination]
 label='行先'
 [e233.assets.destination.directories]
-full=['assets/destination/full']
-right=['assets/destination/right']
-full-top=['assets/destination/full-top']
-right-top=['assets/destination/right-top']
+full=['assets/destination/128x32']
+right=['assets/destination/80x32']
+full-top=['assets/destination/128x16']
+right-top-ja=['assets/destination/80x16/ja']
+right-top-en=['assets/destination/80x16/en']
+[e233.assets.next_stop]
+label='次駅'
+[e233.assets.next_stop.directories]
+right-bottom-ja=['assets/next-stop/80x16/ja']
+right-bottom-en=['assets/next-stop/80x16/en']
+full-bottom-ja=['assets/next-stop/128x16/ja']
+full-bottom-en=['assets/next-stop/128x16/en']
 "#,
     )
     .unwrap()
@@ -96,9 +105,9 @@ async fn invalid_apply_leaves_display_state_unchanged() {
 async fn e233_group_assets_are_discovered_and_blank_is_accepted() {
     let data = tempfile::tempdir().unwrap();
     let train = data.path().join("e233");
-    fs::create_dir_all(train.join("assets/service/left")).unwrap();
-    image::RgbImage::new(48, 32)
-        .save(train.join("assets/service/left/local.png"))
+    fs::create_dir_all(train.join("assets/service/128x32")).unwrap();
+    image::RgbImage::new(128, 32)
+        .save(train.join("assets/service/128x32/local.png"))
         .unwrap();
     let display = spawn_display_worker(|| Ok(Box::new(NullBackend::default()))).unwrap();
     let state = Arc::new(

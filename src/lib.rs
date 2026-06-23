@@ -19,7 +19,8 @@ pub use display::{
 pub use e233::{
     Content as E233Content, DisplayPlan as E233DisplayPlan,
     DisplaySelection as E233DisplaySelection, FieldSelection, Layout as E233Layout,
-    Page as E233Page, PageDuration as E233PageDuration, compile as compile_e233, plan as plan_e233,
+    Page as E233Page, PageDuration as E233PageDuration, ScrollCycleItem, compile as compile_e233,
+    plan as plan_e233,
 };
 pub use font::BdfFont;
 pub use frame::RgbFrame;

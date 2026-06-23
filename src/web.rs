@@ -1,6 +1,6 @@
 use crate::{
     AssetRegistry, DisplayCommand, E233DisplaySelection, FieldSelection, GifRunner, PreviewFrame,
-    Profile, RgbFrame, compile_e233, compile_pattern, new_preview_frame,
+    Profile, RgbFrame, ScrollCycleItem, compile_e233, compile_pattern, new_preview_frame,
 };
 use axum::{
     Json, Router,
@@ -77,12 +77,17 @@ struct ApplyRequest {
     #[serde(default)]
     destination: Option<String>,
     #[serde(default)]
+    next_stop: Option<String>,
+    #[serde(default)]
     scroll_text: String,
+    #[serde(default)]
+    scroll_speed: Option<f64>,
+    #[serde(default)]
+    scroll_cycle: Vec<ScrollCycleItem>,
 }
 fn selection(value: Option<String>) -> FieldSelection {
     match value.as_deref().map(str::trim) {
         None | Some("") => FieldSelection::None,
-        Some("__blank__") => FieldSelection::Blank,
         Some(value) => FieldSelection::Asset(value.to_owned()),
     }
 }
@@ -198,13 +203,29 @@ async fn apply(
     let assets = AssetRegistry::scan(&state.data_dir.join(&req.profile_id))
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let runner = if profile.e233.is_some() {
+        let scroll_speed = req.scroll_speed.unwrap_or_else(|| {
+            profile
+                .scroll_defaults
+                .as_ref()
+                .map(|defaults| defaults.speed_px_per_second)
+                .unwrap_or(50.0)
+        });
+        if !(1.0..=200.0).contains(&scroll_speed) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                "scroll_speed must be 1..200".into(),
+            ));
+        }
         let selection = E233DisplaySelection {
             service: selection(req.service),
             route: selection(req.route),
             service_change: selection(req.service_change),
             through_route: selection(req.through_route),
             destination: selection(req.destination),
+            next_stop: selection(req.next_stop),
             scroll_text: req.scroll_text,
+            scroll_speed,
+            scroll_cycle: req.scroll_cycle,
             brightness: req.brightness,
         };
         compile_e233(

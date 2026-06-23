@@ -22,25 +22,24 @@ sudo cargo run --release --features hardware
 
 自由記述スクリプトはありません。WebUIでS（種別）、R（路線名）、C（種別変更）、T（直通先路線名）、D（行先）、スクロール文字を選ぶと、規則に従う3秒ページ列が自動生成されます。各候補には「なし」と「無表示」があります。
 
-PNGは`data/trains/e233-7000/assets/`の以下へ配置します。ファイル名（拡張子なし）がアセットIDです。同じIDの画像を複数サイズへ置くと、表示レイアウトに合わせて使い分けます。
+PNGは`data/trains/e233-9000/assets/`の以下へ配置します。ファイル名（拡張子なし）がアセットIDです。同じIDの画像を複数サイズ・言語へ置くと、表示レイアウトに合わせて使い分けます。
 
 ```text
-service/full             128x32
-service/left             48x32
-route/full               128x32
-route/full-top           128x16
-route/right-top          80x16
-service-change/right     80x32
-through-route/full       128x32
-through-route/right      80x32
-through-route/right-bottom 80x16
-destination/full         128x32
-destination/right        80x32
-destination/full-top     128x16
-destination/right-top    80x16
+service/128x32           128x32
+service/48x32/ja         48x32
+service/48x32/en         48x32
+destination/128x32       128x32
+destination/80x32        80x32
+destination/80x16/ja,en  80x16
+destination/128x16       128x16（オプション）
+route/80x32,80x16        路線名
+through-route/80x32,80x16 直通先路線名
+service-change/80x32     種別変更
+next-stop/80x16/ja,en    次駅
+next-stop/128x16/ja,en   種別なし用の次駅（オプション）
 ```
 
-スクロールは東雲BDF（`data/fonts/shinonome-mincho-16/`）で描画し、種別ありなら右下80×16、種別なしなら下段128×16だけを更新します。停止はその瞬間のフレームを残します。
+スクロールは東雲BDF（`data/fonts/shinonome-mincho-16/`）で描画し、種別ありなら右下80×16、種別なしなら下段128×16だけを更新します。WebUIでスクロール速度と、スクロール中に切り替える日英行先・路線名・直通先路線名を選べます。停止はその瞬間のフレームを残します。
 
 `data/test.gif`は128×32のループGIFです。WebUIの「テストパターンの表示」で連続再生し、通常表示・停止・消灯で直ちに中断します。
 
