@@ -33,7 +33,6 @@ pub struct DisplaySelection {
     pub destination: FieldSelection,
     pub route: FieldSelection,
     pub through_route: FieldSelection,
-    pub route_through: FieldSelection,
     pub service_change: FieldSelection,
     pub next_stop: FieldSelection,
     pub scroll_text: String,
@@ -122,7 +121,6 @@ pub fn plan(selection: &DisplaySelection) -> Result<DisplayPlan, String> {
     if !selection.service.participates()
         && (selection.route.participates()
             || selection.through_route.participates()
-            || selection.route_through.participates()
             || selection.service_change.participates())
     {
         return Err("路線名・直通先路線名・種別変更は種別と一緒に表示してください。".into());
@@ -185,21 +183,37 @@ pub fn plan(selection: &DisplaySelection) -> Result<DisplayPlan, String> {
                 });
             }
         }
-        for (name, value) in [
-            ("route_right", &selection.route),
-            ("through_route_right", &selection.through_route),
-            ("route_through_right", &selection.route_through),
-            ("service_change_right", &selection.service_change),
-        ] {
-            if value.participates() {
-                pages.push(Page {
-                    layout: Layout::ServiceAndRight(
-                        service("service_ja"),
-                        Content::Field(name, value.clone()),
-                    ),
-                    duration: PageDuration::Fixed(FIXED),
-                });
-            }
+        if selection.route.participates() && selection.through_route.participates() {
+            pages.push(Page {
+                layout: Layout::ServiceAndRightSplit(
+                    service("service_ja"),
+                    Content::Field("route_top", selection.route.clone()),
+                    Content::Field("through_route_bottom", selection.through_route.clone()),
+                ),
+                duration: PageDuration::Fixed(FIXED),
+            });
+        } else if selection.route.participates() || selection.through_route.participates() {
+            let (name, value) = if selection.route.participates() {
+                ("route_right", &selection.route)
+            } else {
+                ("through_route_right", &selection.through_route)
+            };
+            pages.push(Page {
+                layout: Layout::ServiceAndRight(
+                    service("service_ja"),
+                    Content::Field(name, value.clone()),
+                ),
+                duration: PageDuration::Fixed(FIXED),
+            });
+        }
+        if selection.service_change.participates() {
+            pages.push(Page {
+                layout: Layout::ServiceAndRight(
+                    service("service_ja"),
+                    Content::Field("service_change_right", selection.service_change.clone()),
+                ),
+                duration: PageDuration::Fixed(FIXED),
+            });
         }
         if pages.is_empty() {
             pages.push(Page {
@@ -339,7 +353,6 @@ fn should_use_service_full(
         && !selection.destination.participates()
         && !selection.route.participates()
         && !selection.through_route.participates()
-        && !selection.route_through.participates()
         && !selection.service_change.participates()
         && !selection.next_stop.participates()
         && has_asset(assets, config, "service", id, "full", FULL)
@@ -410,17 +423,29 @@ fn normal_pages(
                 )?);
             }
         }
-        for (group, value) in [
-            ("route", &s.route),
-            ("through_route", &s.through_route),
-            ("route_through", &s.route_through),
-            ("service_change", &s.service_change),
-        ] {
-            if value.participates() {
-                pages.push(right_value(
-                    profile, assets, config, &s.service, "left-ja", group, value, "right",
-                )?);
-            }
+        if s.route.participates() && s.through_route.participates() {
+            pages.push(route_through_frame(profile, assets, config, s)?);
+        } else if s.route.participates() || s.through_route.participates() {
+            let (group, value) = if s.route.participates() {
+                ("route", &s.route)
+            } else {
+                ("through_route", &s.through_route)
+            };
+            pages.push(right_value(
+                profile, assets, config, &s.service, "left-ja", group, value, "right",
+            )?);
+        }
+        if s.service_change.participates() {
+            pages.push(right_value(
+                profile,
+                assets,
+                config,
+                &s.service,
+                "left-ja",
+                "service_change",
+                &s.service_change,
+                "right",
+            )?);
         }
         if pages.is_empty() {
             pages.push(service_single(profile, assets, config, &s.service)?);
@@ -639,6 +664,47 @@ fn right_value(
     )?;
     Ok(frame)
 }
+
+fn route_through_frame(
+    profile: &Profile,
+    assets: &AssetRegistry,
+    config: &E233Config,
+    s: &DisplaySelection,
+) -> Result<RgbFrame, String> {
+    let mut frame = RgbFrame::black(128, 32);
+    draw(
+        profile,
+        assets,
+        config,
+        "service",
+        &s.service,
+        "left-ja",
+        SERVICE_LEFT,
+        &mut frame,
+    )?;
+    draw(
+        profile,
+        assets,
+        config,
+        "route",
+        &s.route,
+        "right-top",
+        RIGHT_TOP,
+        &mut frame,
+    )?;
+    draw(
+        profile,
+        assets,
+        config,
+        "through_route",
+        &s.through_route,
+        "right-top",
+        RIGHT_BOTTOM,
+        &mut frame,
+    )?;
+    Ok(frame)
+}
+
 fn split(
     profile: &Profile,
     assets: &AssetRegistry,

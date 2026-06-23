@@ -10,7 +10,6 @@ fn selection() -> E233DisplaySelection {
         route: FieldSelection::None,
         service_change: FieldSelection::None,
         through_route: FieldSelection::None,
-        route_through: FieldSelection::None,
         destination: FieldSelection::None,
         next_stop: FieldSelection::None,
         scroll_text: String::new(),
@@ -68,7 +67,6 @@ fn scroll_requires_destination() {
         route: FieldSelection::Asset("saikyo".into()),
         service_change: FieldSelection::None,
         through_route: FieldSelection::None,
-        route_through: FieldSelection::None,
         destination: FieldSelection::None,
         next_stop: FieldSelection::None,
         scroll_text: "この電車は相鉄線へ直通します".into(),
@@ -88,31 +86,28 @@ fn static_pages_follow_destination_route_through_change_order() {
     s.route = FieldSelection::Asset("r".into());
     s.through_route = FieldSelection::Asset("t".into());
     let plan = plan_e233(&s).unwrap();
-    assert_eq!(plan.pages.len(), 3);
+    assert_eq!(plan.pages.len(), 2);
     assert!(matches!(
         plan.pages[0].layout,
         E233Layout::ServiceAndRight(..)
     ));
     assert!(matches!(
         plan.pages[1].layout,
-        E233Layout::ServiceAndRight(..)
-    ));
-    assert!(matches!(
-        plan.pages[2].layout,
-        E233Layout::ServiceAndRight(..)
+        E233Layout::ServiceAndRightSplit(..)
     ));
 }
 
 #[test]
-fn route_through_combined_is_a_separate_static_page() {
+fn route_and_through_are_composed_into_one_static_page() {
     let mut s = selection();
     s.service = FieldSelection::Asset("local".into());
-    s.route_through = FieldSelection::Asset("saikyo_sotetsu".into());
+    s.route = FieldSelection::Asset("saikyo".into());
+    s.through_route = FieldSelection::Asset("sotetsu".into());
     let plan = plan_e233(&s).unwrap();
     assert_eq!(plan.pages.len(), 1);
     assert!(matches!(
         plan.pages[0].layout,
-        E233Layout::ServiceAndRight(..)
+        E233Layout::ServiceAndRightSplit(..)
     ));
 }
 

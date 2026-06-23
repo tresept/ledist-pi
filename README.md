@@ -34,7 +34,6 @@ destination/80x16/ja,en  80x16
 destination/128x16       128x16（オプション）
 route/80x32,80x16        路線名
 through-route/80x32,80x16 直通先路線名
-route-through/80x32       路線名・直通先の併記（完成画像）
 service-change/80x32     種別変更
 next-stop/80x16/ja,en    次駅
 next-stop/128x16/ja,en   種別なし用の次駅（オプション）
