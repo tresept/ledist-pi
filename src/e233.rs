@@ -33,6 +33,7 @@ pub struct DisplaySelection {
     pub destination: FieldSelection,
     pub route: FieldSelection,
     pub through_route: FieldSelection,
+    pub route_through: FieldSelection,
     pub service_change: FieldSelection,
     pub next_stop: FieldSelection,
     pub scroll_text: String,
@@ -121,6 +122,7 @@ pub fn plan(selection: &DisplaySelection) -> Result<DisplayPlan, String> {
     if !selection.service.participates()
         && (selection.route.participates()
             || selection.through_route.participates()
+            || selection.route_through.participates()
             || selection.service_change.participates())
     {
         return Err("路線名・直通先路線名・種別変更は種別と一緒に表示してください。".into());
@@ -186,6 +188,7 @@ pub fn plan(selection: &DisplaySelection) -> Result<DisplayPlan, String> {
         for (name, value) in [
             ("route_right", &selection.route),
             ("through_route_right", &selection.through_route),
+            ("route_through_right", &selection.route_through),
             ("service_change_right", &selection.service_change),
         ] {
             if value.participates() {
@@ -336,6 +339,7 @@ fn should_use_service_full(
         && !selection.destination.participates()
         && !selection.route.participates()
         && !selection.through_route.participates()
+        && !selection.route_through.participates()
         && !selection.service_change.participates()
         && !selection.next_stop.participates()
         && has_asset(assets, config, "service", id, "full", FULL)
@@ -409,6 +413,7 @@ fn normal_pages(
         for (group, value) in [
             ("route", &s.route),
             ("through_route", &s.through_route),
+            ("route_through", &s.route_through),
             ("service_change", &s.service_change),
         ] {
             if value.participates() {

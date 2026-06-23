@@ -37,6 +37,11 @@ label = "直通先路線名"
 right = ["assets/through-route/80x32"]
 right-top = ["assets/through-route/80x16"]
 
+[e233.assets.route_through]
+label = "路線・直通併記"
+[e233.assets.route_through.directories]
+right = ["assets/route-through/80x32"]
+
 [e233.assets.service_change]
 label = "種別変更"
 [e233.assets.service_change.directories]

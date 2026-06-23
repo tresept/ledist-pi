@@ -75,6 +75,8 @@ struct ApplyRequest {
     #[serde(default)]
     through_route: Option<String>,
     #[serde(default)]
+    route_through: Option<String>,
+    #[serde(default)]
     destination: Option<String>,
     #[serde(default)]
     next_stop: Option<String>,
@@ -221,6 +223,7 @@ async fn apply(
             route: selection(req.route),
             service_change: selection(req.service_change),
             through_route: selection(req.through_route),
+            route_through: selection(req.route_through),
             destination: selection(req.destination),
             next_stop: selection(req.next_stop),
             scroll_text: req.scroll_text,

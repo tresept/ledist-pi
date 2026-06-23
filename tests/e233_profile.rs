@@ -13,6 +13,7 @@ fn e233_9000_defines_every_common_and_optional_asset_variant() {
         ),
         ("route", &["right", "right-top"][..]),
         ("through_route", &["right", "right-top"][..]),
+        ("route_through", &["right"][..]),
         ("service_change", &["right"][..]),
         (
             "next_stop",
