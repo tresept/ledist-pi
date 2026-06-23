@@ -54,6 +54,6 @@ full-bottom-en = ["assets/next-stop/128x16/en"]
 font = "shinonome-mincho-16"
 color = "#ffd060"
 speed_px_per_second = 50.0
-start_padding = 80
+start_padding = 0
 end_padding = 80
 repeat = false

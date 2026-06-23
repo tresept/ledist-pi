@@ -79,7 +79,10 @@ impl ScriptRunner {
         );
         let offset = (now.duration_since(*started).as_secs_f64() * scroll.speed_px_per_second)
             .floor() as isize;
-        let x = scroll.region.width as isize + scroll.start_padding as isize - offset;
+        // Start inside the visible region so the first glyph is visible as soon
+        // as the page is presented. `start_padding` remains available as an
+        // intentional left inset, rather than an off-screen delay.
+        let x = scroll.start_padding as isize - offset;
         let mut layer = RgbFrame::black(scroll.region.width, scroll.region.height);
         scroll
             .font
@@ -102,11 +105,8 @@ impl ScriptRunner {
         }
         let offset = (now.duration_since(*started).as_secs_f64() * scroll.speed_px_per_second)
             .floor() as isize;
-        let x =
-            scroll.region.x as isize + scroll.region.width as isize + scroll.start_padding as isize
-                - offset;
-        x + scroll.font.measure(&scroll.text) as isize + (scroll.end_padding as isize)
-            < scroll.region.x as isize
+        let x = scroll.start_padding as isize - offset;
+        x + scroll.font.measure(&scroll.text) as isize + (scroll.end_padding as isize) < 0
     }
     pub fn tick(&mut self, now: Instant) -> Result<Vec<ScriptEvent>> {
         let mut events = Vec::new();

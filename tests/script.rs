@@ -36,10 +36,10 @@ fn scroll_advances_by_elapsed_time_and_then_allows_wait_scroll_end() {
         None,
     );
     let start = Instant::now();
-    assert!(matches!(
-        runner.tick(start).unwrap().first(),
-        Some(ScriptEvent::Present(_))
-    ));
+    let first = runner.tick(start).unwrap();
+    assert!(
+        matches!(first.first(), Some(ScriptEvent::Present(frame)) if frame.pixel(0, 0) == Some([255, 0, 0]))
+    );
     assert!(matches!(
         runner.tick(start + Duration::from_secs(4)).unwrap().last(),
         Some(ScriptEvent::Blank)
@@ -118,13 +118,13 @@ fn later_static_frame_keeps_an_active_scroll() {
             width: 2,
             height: 1,
         },
-        text: "A".into(),
+        text: "AAA".into(),
         font,
         color: [255, 0, 0],
         speed_px_per_second: 1.0,
         start_padding: 0,
         end_padding: 0,
-        repeat: false,
+        repeat: true,
     };
     let mut runner = ScriptRunner::new(
         4,
