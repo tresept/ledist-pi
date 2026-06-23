@@ -1,7 +1,8 @@
 use axum::{
     body::Body,
-    http::{Request, StatusCode},
+    http::{Request, StatusCode, header::CONTENT_TYPE},
 };
+use image::GenericImageView;
 use ledist_pi::{AppState, NullBackend, Profile, spawn_display_worker, web_router};
 use std::{fs, sync::Arc};
 use tower::ServiceExt;
@@ -54,6 +55,26 @@ async fn profiles_endpoint_returns_registered_profile() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn preview_endpoint_returns_a_128_by_32_png() {
+    let app = web_router(Arc::new(AppState::new(vec![])));
+    let response = app
+        .oneshot(
+            Request::get("/api/display/preview.png")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[CONTENT_TYPE], "image/png");
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let image = image::load_from_memory(&body).unwrap();
+    assert_eq!(image.dimensions(), (128, 32));
 }
 #[tokio::test]
 async fn invalid_apply_leaves_display_state_unchanged() {

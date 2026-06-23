@@ -1,12 +1,12 @@
 use crate::{
-    AssetRegistry, DisplayCommand, E233DisplaySelection, FieldSelection, GifRunner, Profile,
-    compile_e233, compile_pattern,
+    AssetRegistry, DisplayCommand, E233DisplaySelection, FieldSelection, GifRunner, PreviewFrame,
+    Profile, RgbFrame, compile_e233, compile_pattern, new_preview_frame,
 };
 use axum::{
     Json, Router,
     extract::{Path, State},
     http::StatusCode,
-    response::{Html, IntoResponse},
+    response::{Html, IntoResponse, Response},
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -21,6 +21,7 @@ pub struct AppState {
     current: Mutex<Option<DisplayState>>,
     data_dir: PathBuf,
     display: Option<Sender<DisplayCommand>>,
+    preview: PreviewFrame,
 }
 #[derive(Clone, Serialize)]
 pub struct DisplayState {
@@ -37,6 +38,7 @@ impl AppState {
             current: Mutex::new(None),
             data_dir: PathBuf::from("data/trains"),
             display: None,
+            preview: new_preview_frame(),
         }
     }
     pub fn with_display(mut self, display: Sender<DisplayCommand>) -> Self {
@@ -45,6 +47,10 @@ impl AppState {
     }
     pub fn with_data_dir(mut self, data_dir: impl Into<PathBuf>) -> Self {
         self.data_dir = data_dir.into();
+        self
+    }
+    pub fn with_preview(mut self, preview: PreviewFrame) -> Self {
+        self.preview = preview;
         self
     }
     pub fn current_state(&self) -> Option<DisplayState> {
@@ -93,7 +99,30 @@ pub fn web_router(state: Arc<AppState>) -> Router {
         .route("/api/display/test", post(test_display))
         .route("/api/display/blank", post(blank))
         .route("/api/display/state", get(display_state))
+        .route("/api/display/preview.png", get(preview_png))
         .with_state(state)
+}
+async fn preview_png(State(state): State<Arc<AppState>>) -> Result<Response, StatusCode> {
+    let frame = state
+        .preview
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| RgbFrame::black(128, 32));
+    let image = image::RgbImage::from_raw(
+        frame.width() as u32,
+        frame.height() as u32,
+        frame.as_rgb().to_vec(),
+    )
+    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageRgb8(image)
+        .write_to(
+            &mut std::io::Cursor::new(&mut bytes),
+            image::ImageFormat::Png,
+        )
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(([(axum::http::header::CONTENT_TYPE, "image/png")], bytes).into_response())
 }
 async fn index() -> Html<&'static str> {
     Html(include_str!("../web/index.html"))

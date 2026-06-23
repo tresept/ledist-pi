@@ -1,4 +1,8 @@
-use ledist_pi::{DisplayBackend, NullBackend, RgbFrame};
+use ledist_pi::{
+    DisplayBackend, DisplayCommand, NullBackend, RgbFrame, new_preview_frame,
+    spawn_display_worker_with_preview,
+};
+use std::time::Duration;
 
 #[test]
 fn frame_blits_only_inside_the_target_region() {
@@ -25,4 +29,20 @@ fn null_backend_keeps_the_last_presented_frame() {
     let mut backend = NullBackend::default();
     backend.present(&frame).unwrap();
     assert_eq!(backend.last_frame().unwrap().as_rgb(), frame.as_rgb());
+}
+
+#[test]
+fn present_updates_the_shared_preview_frame() {
+    let preview = new_preview_frame();
+    let sender =
+        spawn_display_worker_with_preview(|| Ok(Box::new(NullBackend::default())), preview.clone())
+            .unwrap();
+    sender
+        .send(DisplayCommand::Present(RgbFrame::solid(128, 32, [1, 2, 3])))
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(50));
+    assert_eq!(
+        preview.lock().unwrap().as_ref().unwrap().pixel(0, 0),
+        Some([1, 2, 3])
+    );
 }

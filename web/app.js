@@ -10,4 +10,5 @@ $('#apply').onclick=async()=>{try{const v=Object.fromEntries(new FormData($('#fo
 $('#stop').onclick=async()=>{try{await json('/api/display/stop',{method:'POST'});message('停止しました。現在の表示を維持します。')}catch(e){message(e.message)}};
 $('#blank').onclick=async()=>{try{await json('/api/display/blank',{method:'POST'});message('消灯しました。')}catch(e){message(e.message)}};
 $('#test').onclick=async()=>{try{await json('/api/display/test',{method:'POST'});message('テストパターンを表示しています。')}catch(e){message(e.message)}};
+setInterval(()=>{$('#preview').src=`/api/display/preview.png?t=${Date.now()}`},1000/30);
 init().catch(e=>message(e.message));

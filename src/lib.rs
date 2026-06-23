@@ -13,7 +13,8 @@ pub use assets::AssetRegistry;
 #[cfg(feature = "hardware")]
 pub use display::MatrixBackend;
 pub use display::{
-    DisplayBackend, DisplayCommand, GifRunner, NullBackend, SimulatorBackend, spawn_display_worker,
+    DisplayBackend, DisplayCommand, GifRunner, NullBackend, PreviewFrame, SimulatorBackend,
+    new_preview_frame, spawn_display_worker, spawn_display_worker_with_preview,
 };
 pub use e233::{
     Content as E233Content, DisplayPlan as E233DisplayPlan,

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ledist_pi::{
     AppState, BackendKind, DisplayBackend, NullBackend, Profile, RuntimeConfig, SimulatorBackend,
-    spawn_display_worker, web_router,
+    new_preview_frame, spawn_display_worker_with_preview, web_router,
 };
 use std::{fs, net::SocketAddr, path::Path, sync::Arc};
 
@@ -32,23 +32,27 @@ async fn main() -> Result<()> {
     } else {
         config.simulator_path.clone()
     };
-    let display = spawn_display_worker(move || {
-        let backend: Box<dyn DisplayBackend> = match backend {
-            BackendKind::Null => Box::new(NullBackend::default()),
-            BackendKind::Simulator => Box::new(SimulatorBackend::new(simulator_path)),
-            BackendKind::Matrix => {
-                #[cfg(feature = "hardware")]
-                {
-                    Box::new(ledist_pi::MatrixBackend::new(&matrix, brightness)?)
+    let preview = new_preview_frame();
+    let display = spawn_display_worker_with_preview(
+        move || {
+            let backend: Box<dyn DisplayBackend> = match backend {
+                BackendKind::Null => Box::new(NullBackend::default()),
+                BackendKind::Simulator => Box::new(SimulatorBackend::new(simulator_path)),
+                BackendKind::Matrix => {
+                    #[cfg(feature = "hardware")]
+                    {
+                        Box::new(ledist_pi::MatrixBackend::new(&matrix, brightness)?)
+                    }
+                    #[cfg(not(feature = "hardware"))]
+                    {
+                        anyhow::bail!("backend=matrix requires --features hardware")
+                    }
                 }
-                #[cfg(not(feature = "hardware"))]
-                {
-                    anyhow::bail!("backend=matrix requires --features hardware")
-                }
-            }
-        };
-        Ok(backend)
-    })?;
+            };
+            Ok(backend)
+        },
+        preview.clone(),
+    )?;
     println!("LEDist UI: http://{address}");
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(
@@ -56,7 +60,8 @@ async fn main() -> Result<()> {
         web_router(Arc::new(
             AppState::new(profiles)
                 .with_data_dir(Path::new(&root).join("trains"))
-                .with_display(display),
+                .with_display(display)
+                .with_preview(preview),
         )),
     )
     .await?;

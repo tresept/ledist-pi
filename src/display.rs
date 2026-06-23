@@ -5,10 +5,16 @@ use anyhow::Result;
 use image::{AnimationDecoder, ImageBuffer, Rgb};
 use std::{
     path::{Path, PathBuf},
-    sync::mpsc,
+    sync::{Arc, Mutex, mpsc},
     thread,
     time::{Duration, Instant},
 };
+
+pub type PreviewFrame = Arc<Mutex<Option<RgbFrame>>>;
+
+pub fn new_preview_frame() -> PreviewFrame {
+    Arc::new(Mutex::new(None))
+}
 
 /// A display backend is used only by its owning display loop.
 ///
@@ -81,6 +87,16 @@ pub fn spawn_display_worker<F>(create: F) -> anyhow::Result<mpsc::Sender<Display
 where
     F: FnOnce() -> Result<Box<dyn DisplayBackend>> + Send + 'static,
 {
+    spawn_display_worker_with_preview(create, new_preview_frame())
+}
+
+pub fn spawn_display_worker_with_preview<F>(
+    create: F,
+    preview: PreviewFrame,
+) -> anyhow::Result<mpsc::Sender<DisplayCommand>>
+where
+    F: FnOnce() -> Result<Box<dyn DisplayBackend>> + Send + 'static,
+{
     let (sender, receiver) = mpsc::channel();
     let (ready_sender, ready_receiver) = mpsc::sync_channel(1);
     thread::spawn(move || {
@@ -117,7 +133,7 @@ where
                 Ok(command) => {
                     script = None;
                     gif = None;
-                    run_command(&mut *backend, command)
+                    run_command(&mut *backend, command, &preview)
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
@@ -127,14 +143,18 @@ where
                     Ok(events) => {
                         for event in events {
                             match event {
-                                ScriptEvent::Present(frame) => {
-                                    run_command(&mut *backend, DisplayCommand::Present(frame))
-                                }
-                                ScriptEvent::Brightness(value) => {
-                                    run_command(&mut *backend, DisplayCommand::SetBrightness(value))
-                                }
+                                ScriptEvent::Present(frame) => run_command(
+                                    &mut *backend,
+                                    DisplayCommand::Present(frame),
+                                    &preview,
+                                ),
+                                ScriptEvent::Brightness(value) => run_command(
+                                    &mut *backend,
+                                    DisplayCommand::SetBrightness(value),
+                                    &preview,
+                                ),
                                 ScriptEvent::Blank => {
-                                    run_command(&mut *backend, DisplayCommand::Blank)
+                                    run_command(&mut *backend, DisplayCommand::Blank, &preview)
                                 }
                             }
                         }
@@ -148,7 +168,7 @@ where
             if let Some(runner) = &mut gif
                 && let Some(frame) = runner.tick(Instant::now())
             {
-                run_command(&mut *backend, DisplayCommand::Present(frame));
+                run_command(&mut *backend, DisplayCommand::Present(frame), &preview);
             }
         }
     });
@@ -159,7 +179,7 @@ where
     Ok(sender)
 }
 
-fn run_command(backend: &mut dyn DisplayBackend, command: DisplayCommand) {
+fn run_command(backend: &mut dyn DisplayBackend, command: DisplayCommand, preview: &PreviewFrame) {
     let result = match command {
         DisplayCommand::Present(frame) => {
             eprintln!(
@@ -168,7 +188,11 @@ fn run_command(backend: &mut dyn DisplayBackend, command: DisplayCommand) {
                 frame.height(),
                 frame.as_rgb().len()
             );
-            backend.present(&frame)
+            let result = backend.present(&frame);
+            if result.is_ok() {
+                *preview.lock().unwrap() = Some(frame);
+            }
+            result
         }
         DisplayCommand::SetBrightness(brightness) => {
             eprintln!("[display] brightness request: {brightness}");
@@ -176,7 +200,18 @@ fn run_command(backend: &mut dyn DisplayBackend, command: DisplayCommand) {
         }
         DisplayCommand::Blank => {
             eprintln!("[display] blank request");
-            backend.blank()
+            let result = backend.blank();
+            if result.is_ok() {
+                let black = preview
+                    .lock()
+                    .unwrap()
+                    .as_ref()
+                    .map(|frame| RgbFrame::black(frame.width(), frame.height()));
+                if let Some(black) = black {
+                    *preview.lock().unwrap() = Some(black);
+                }
+            }
+            result
         }
         DisplayCommand::StartScript(_) => return,
         DisplayCommand::StartGif(_) => return,
