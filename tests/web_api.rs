@@ -86,6 +86,24 @@ async fn preview_endpoint_returns_a_128_by_32_png() {
     assert_eq!(image.dimensions(), (128, 32));
 }
 #[tokio::test]
+async fn canvas_preview_endpoint_returns_128_by_32_rgb_bytes() {
+    let app = web_router(Arc::new(AppState::new(vec![])));
+    let response = app
+        .oneshot(
+            Request::get("/api/display/preview.rgb")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.headers()[CONTENT_TYPE], "application/octet-stream");
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    assert_eq!(body.len(), 128 * 32 * 3);
+}
+#[tokio::test]
 async fn invalid_apply_leaves_display_state_unchanged() {
     let state = Arc::new(AppState::new(vec![e233_profile()]));
     let app = web_router(state.clone());

@@ -13,5 +13,7 @@ $('#apply').onclick=async()=>{try{const form=new FormData($('#form')),v=Object.f
 $('#stop').onclick=async()=>{try{await json('/api/display/stop',{method:'POST'});message('停止しました。現在の表示を維持します。')}catch(e){message(e.message)}};
 $('#blank').onclick=async()=>{try{await json('/api/display/blank',{method:'POST'});message('消灯しました。')}catch(e){message(e.message)}};
 $('#test').onclick=async()=>{try{await json('/api/display/test',{method:'POST'});message('テストパターンを表示しています。')}catch(e){message(e.message)}};
-setInterval(()=>{$('#preview').src=`/api/display/preview.png?t=${Date.now()}`},1000/30);
+const preview=$('#preview'),previewContext=preview.getContext('2d'),previewImage=previewContext.createImageData(128,32);let previewBusy=false;
+async function updatePreview(){if(previewBusy)return;previewBusy=true;try{const response=await fetch('/api/display/preview.rgb',{cache:'no-store'});if(!response.ok)return;const rgb=new Uint8Array(await response.arrayBuffer());if(rgb.length!==128*32*3)return;for(let source=0,target=0;source<rgb.length;source+=3,target+=4){previewImage.data[target]=rgb[source];previewImage.data[target+1]=rgb[source+1];previewImage.data[target+2]=rgb[source+2];previewImage.data[target+3]=255}previewContext.putImageData(previewImage,0,0)}finally{previewBusy=false}}
+setInterval(updatePreview,1000/30);updatePreview();
 init().catch(e=>message(e.message));

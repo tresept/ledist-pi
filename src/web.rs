@@ -112,7 +112,24 @@ pub fn web_router(state: Arc<AppState>) -> Router {
         .route("/api/display/blank", post(blank))
         .route("/api/display/state", get(display_state))
         .route("/api/display/preview.png", get(preview_png))
+        .route("/api/display/preview.rgb", get(preview_rgb))
         .with_state(state)
+}
+async fn preview_rgb(State(state): State<Arc<AppState>>) -> Response {
+    let frame = state
+        .preview
+        .lock()
+        .unwrap()
+        .clone()
+        .unwrap_or_else(|| RgbFrame::black(128, 32));
+    (
+        [
+            (axum::http::header::CONTENT_TYPE, "application/octet-stream"),
+            (axum::http::header::CACHE_CONTROL, "no-store"),
+        ],
+        frame.as_rgb().to_vec(),
+    )
+        .into_response()
 }
 async fn preview_png(State(state): State<Arc<AppState>>) -> Result<Response, StatusCode> {
     let frame = state
